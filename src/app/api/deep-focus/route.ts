@@ -24,13 +24,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Saving deep focus session:', {
-      clerkId,
-      durationSeconds,
-      sessionStartTime,
-      sessionEndTime,
-      isCompleted,
-    });
+
 
     // Insert the deep focus session
     const result = await sql`
@@ -49,7 +43,7 @@ export async function POST(request: NextRequest) {
 			) RETURNING id, duration_seconds, duration_minutes, session_date, created_at
 		`;
 
-    console.log('Deep focus session saved successfully:', result[0]);
+    console.log('Deep focus session saved successfully');
 
     return NextResponse.json({
       success: true,
@@ -77,7 +71,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('Fetching deep focus data for:', { clerkId, period });
+
 
     let query;
 
@@ -158,7 +152,7 @@ export async function GET(request: NextRequest) {
 
     const result = await query;
 
-    console.log('Deep focus data retrieved:', result);
+    console.log('Deep focus data retrieved successfully');
 
     return NextResponse.json({
       success: true,

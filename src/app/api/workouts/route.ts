@@ -208,21 +208,18 @@ export async function DELETE(request: NextRequest) {
     const sessionId = searchParams.get('sessionId');
     const exerciseId = searchParams.get('exerciseId');
 
-    console.log('DELETE request received:', { clerkId, sessionId, exerciseId });
+
 
     if (!clerkId) {
-      console.log('Missing clerkId');
       return NextResponse.json({ error: 'Clerk ID is required' }, { status: 401 });
     }
 
     if (!sessionId) {
-      console.log('Missing sessionId');
       return NextResponse.json({ error: 'Session ID is required' }, { status: 400 });
     }
 
     const parsedSessionId = parseInt(sessionId);
     if (isNaN(parsedSessionId)) {
-      console.log('Invalid sessionId:', sessionId);
       return NextResponse.json({ error: 'Invalid session ID format' }, { status: 400 });
     }
 
@@ -230,11 +227,10 @@ export async function DELETE(request: NextRequest) {
     if (exerciseId) {
       const parsedExerciseId = parseInt(exerciseId);
       if (isNaN(parsedExerciseId)) {
-        console.log('Invalid exerciseId:', exerciseId);
         return NextResponse.json({ error: 'Invalid exercise ID format' }, { status: 400 });
       }
 
-      console.log('Deleting individual exercise:', { parsedExerciseId, parsedSessionId, clerkId });
+
 
       // Verify the exercise belongs to a session owned by the user
       const exerciseCheck = await sql`
@@ -244,7 +240,7 @@ export async function DELETE(request: NextRequest) {
 				WHERE we.id = ${parsedExerciseId} AND ws.clerk_id = ${clerkId}
 			`;
 
-      console.log('Exercise check result:', exerciseCheck);
+
 
       if (exerciseCheck.length === 0) {
         console.log('Exercise not found or access denied');
@@ -286,7 +282,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // If no exerciseId, delete entire session (existing behavior)
-    console.log('Checking session ownership:', { parsedSessionId, clerkId });
+
 
     // First verify the session belongs to the user
     const sessionCheck = await sql`
@@ -294,7 +290,7 @@ export async function DELETE(request: NextRequest) {
 			WHERE id = ${parsedSessionId} AND clerk_id = ${clerkId}
 		`;
 
-    console.log('Session check result:', sessionCheck);
+
 
     if (sessionCheck.length === 0) {
       console.log('Session not found or access denied');
@@ -304,7 +300,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    console.log('Deleting session:', parsedSessionId);
+
 
     // Delete the workout session (this will cascade delete all exercises due to ON DELETE CASCADE)
     await sql`
