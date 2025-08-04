@@ -136,7 +136,7 @@ Be accurate and realistic with the values. Do not include any text before or aft
       const responseText = data.candidates[0].content.parts[0].text.trim();
 
       // Try to extract JSON from the response
-      let jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('No JSON found in response');
       }

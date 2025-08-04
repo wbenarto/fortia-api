@@ -1,8 +1,46 @@
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
-import { getTodayDate, getDayBounds } from '@/lib/dateUtils';
+import { getDayBounds } from '@/lib/dateUtils';
 
 const sql = neon(process.env.DATABASE_URL!);
+
+interface WorkoutRow {
+  session_id: number;
+  title: string;
+  workout_type: string;
+  scheduled_date: string;
+  created_at: string;
+  exercise_id?: number;
+  exercise_name?: string;
+  sets?: number;
+  reps?: number;
+  weight?: number;
+  duration?: number;
+  order_index?: number;
+  is_completed?: boolean;
+  completed_at?: string;
+  calories_burned?: number;
+}
+
+interface GroupedWorkout {
+  id: number;
+  title: string;
+  workout_type: string;
+  scheduled_date: string;
+  created_at: string;
+  exercises: Array<{
+    id: number;
+    name: string;
+    sets?: number;
+    reps?: number;
+    weight?: number;
+    duration?: number;
+    order_index?: number;
+    is_completed?: boolean;
+    completed_at?: string;
+    calories_burned?: number;
+  }>;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -159,7 +197,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Group exercises by session
-    const groupedWorkouts = workouts.reduce((acc: any, row: any) => {
+    const groupedWorkouts = (workouts as WorkoutRow[]).reduce((acc: Record<string, GroupedWorkout>, row: WorkoutRow) => {
       const sessionId = row.session_id;
 
       if (!acc[sessionId]) {
@@ -173,7 +211,7 @@ export async function GET(request: NextRequest) {
         };
       }
 
-      if (row.exercise_id) {
+      if (row.exercise_id && row.exercise_name) {
         acc[sessionId].exercises.push({
           id: row.exercise_id,
           name: row.exercise_name,
@@ -189,7 +227,7 @@ export async function GET(request: NextRequest) {
       }
 
       return acc;
-    }, {});
+    }, {} as Record<string, GroupedWorkout>);
 
     return NextResponse.json({
       success: true,

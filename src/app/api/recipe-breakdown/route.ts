@@ -4,7 +4,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 function extractJson(text: string): string | null {
   // Remove markdown code blocks if present
-  let cleaned = text
+  const cleaned = text
     .replace(/```json\s*/gi, '')
     .replace(/```\s*/gi, '')
     .trim();
@@ -29,13 +29,14 @@ async function retryWithBackoff<T>(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
-    } catch (error: any) {
+    } catch (error: unknown) {
       const isLastAttempt = attempt === maxRetries;
+      const errorMessage = error instanceof Error ? error.message : String(error);
       const isOverloaded =
-        error.message?.includes('overloaded') ||
-        error.message?.includes('quota') ||
-        error.message?.includes('429') ||
-        error.message?.includes('rate limit');
+        errorMessage.includes('overloaded') ||
+        errorMessage.includes('quota') ||
+        errorMessage.includes('429') ||
+        errorMessage.includes('rate limit');
 
       if (isLastAttempt || !isOverloaded) {
         throw error;
