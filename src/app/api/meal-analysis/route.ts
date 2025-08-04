@@ -99,7 +99,7 @@ Return ONLY a valid JSON object with this exact structure:
 Be accurate and realistic with the values. Do not include any text before or after the JSON object.`;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: {
