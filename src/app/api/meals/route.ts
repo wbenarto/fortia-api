@@ -173,29 +173,137 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PUT - Update an existing meal
+export async function PUT(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const mealId = searchParams.get('id');
+
+    if (!mealId) {
+      return ErrorResponses.badRequest('Meal ID is required');
+    }
+
+    const {
+      foodName,
+      portionSize,
+      calories,
+      protein,
+      carbs,
+      fats,
+      fiber,
+      sugar,
+      sodium,
+      confidenceScore,
+      mealType,
+      notes,
+    } = await request.json();
+
+    const updatedMeal = await sql`
+      UPDATE meals SET
+        food_name = COALESCE(${foodName}, food_name),
+        portion_size = COALESCE(${portionSize}, portion_size),
+        calories = COALESCE(${calories}, calories),
+        protein = COALESCE(${protein}, protein),
+        carbs = COALESCE(${carbs}, carbs),
+        fats = COALESCE(${fats}, fats),
+        fiber = COALESCE(${fiber}, fiber),
+        sugar = COALESCE(${sugar}, sugar),
+        sodium = COALESCE(${sodium}, sodium),
+        confidence_score = COALESCE(${confidenceScore}, confidence_score),
+        meal_type = COALESCE(${mealType}, meal_type),
+        notes = COALESCE(${notes}, notes),
+        updated_at = NOW()
+      WHERE id = ${mealId}
+      RETURNING *
+    `;
+
+    if (updatedMeal.length === 0) {
+      return ErrorResponses.notFound('Meal not found');
+    }
+
+    return NextResponse.json({ success: true, data: updatedMeal[0] });
+  } catch (error) {
+    console.error('Update meal error:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to update meal',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE - Delete a meal
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const mealId = searchParams.get('id');
+
+    if (!mealId) {
+      return ErrorResponses.badRequest('Meal ID is required');
+    }
+
+    const deletedMeal = await sql`
+      DELETE FROM meals WHERE id = ${mealId} RETURNING *
+    `;
+
+    if (deletedMeal.length === 0) {
+      return ErrorResponses.notFound('Meal not found');
+    }
+
+    return NextResponse.json({ success: true, data: deletedMeal[0] });
+  } catch (error) {
+    console.error('Delete meal error:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to delete meal',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// Debug endpoint to see all meals for a user
+export async function PATCH(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
     const clerkId = searchParams.get('clerkId');
 
-    if (!mealId || !clerkId) {
-      return ErrorResponses.badRequest('Meal ID and Clerk ID are required');
+    if (!clerkId) {
+      return ErrorResponses.badRequest('Clerk ID is required');
     }
 
-    const result = await sql`
-			DELETE FROM meals 
-			WHERE id = ${mealId} AND clerk_id = ${clerkId}
-			RETURNING *
-		`;
+    // Get user info
+    const userInfo = await sql`
+      SELECT id, first_name, last_name, email, clerk_id, created_at
+      FROM users 
+      WHERE clerk_id = ${clerkId}
+    `;
 
-    if (result.length === 0) {
-      return ErrorResponses.notFound('Meal not found or unauthorized');
-    }
+    // Get all meals for debugging
+    const allMeals = await sql`
+      SELECT id, food_name, created_at, DATE(created_at) as date_only
+      FROM meals 
+      WHERE clerk_id = ${clerkId}
+      ORDER BY created_at DESC
+      LIMIT 10
+    `;
 
-    return NextResponse.json({ success: true, data: result[0] });
+    return NextResponse.json({
+      success: true,
+      user: userInfo.length > 0 ? userInfo[0] : null,
+      meals: allMeals,
+      debug: {
+        today: new Date().toISOString().split('T')[0],
+        now: new Date().toISOString(),
+        userExists: userInfo.length > 0,
+        mealCount: allMeals.length,
+      },
+    });
   } catch (error) {
-    return handleDatabaseError(error);
+    console.error('Debug meals error:', error);
+    return NextResponse.json({ error: 'Debug failed' }, { status: 500 });
   }
 }

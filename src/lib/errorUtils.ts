@@ -3,20 +3,20 @@ import { NextResponse } from 'next/server';
 export interface ApiError {
   code: string;
   message: string;
-  details?: any;
+  details?: unknown;
   statusCode: number;
 }
 
 export class ApiErrorResponse extends Error {
   public statusCode: number;
   public code: string;
-  public details?: any;
+  public details?: unknown;
 
   constructor(
     message: string,
     statusCode: number = 500,
     code: string = 'INTERNAL_ERROR',
-    details?: any
+    details?: unknown
   ) {
     super(message);
     this.statusCode = statusCode;
@@ -95,7 +95,7 @@ export const ErrorResponses = {
  * Validate required fields
  */
 export function validateRequiredFields(
-  data: any,
+  data: Record<string, unknown>,
   requiredFields: string[]
 ): { isValid: boolean; missingFields: string[] } {
   const missingFields: string[] = [];
@@ -115,7 +115,7 @@ export function validateRequiredFields(
 /**
  * Handle database errors
  */
-export function handleDatabaseError(error: any): NextResponse {
+export function handleDatabaseError(error: unknown): NextResponse {
   console.error('Database error:', error);
 
   if (error.message?.includes('duplicate key')) {
@@ -136,7 +136,7 @@ export function handleDatabaseError(error: any): NextResponse {
 /**
  * Log API request for debugging
  */
-export function logApiRequest(method: string, url: string, data?: any): void {
+export function logApiRequest(method: string, url: string, data?: unknown): void {
   console.log(`🌐 ${method} ${url}`);
   if (data) {
     console.log('📤 Request data:', JSON.stringify(data, null, 2));
@@ -146,7 +146,7 @@ export function logApiRequest(method: string, url: string, data?: any): void {
 /**
  * Log API response for debugging
  */
-export function logApiResponse(status: number, data?: any): void {
+export function logApiResponse(status: number, data?: unknown): void {
   console.log(`📡 Response status: ${status}`);
   if (data) {
     console.log('📥 Response data:', JSON.stringify(data, null, 2));

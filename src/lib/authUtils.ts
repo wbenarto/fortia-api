@@ -5,6 +5,49 @@ import { hasCompletedOnboarding } from './userUtils';
 
 const sql = neon(process.env.DATABASE_URL!);
 
+// Types for OAuth responses
+interface UserData {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  clerk_id: string;
+  weight?: number;
+  height?: number;
+  fitness_goal?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface OAuthResult {
+  success: boolean;
+  code?: 'success' | 'needs_onboarding' | 'user_creation_failed' | 'user_canceled' | 'error';
+  message: string;
+  needsOnboarding?: boolean;
+  data?: UserData;
+}
+
+interface OAuthSignUp {
+  createdUserId: string;
+  firstName?: string;
+  lastName?: string;
+  emailAddress: string;
+}
+
+interface OAuthSignIn {
+  userId: string;
+  firstName?: string;
+  lastName?: string;
+  emailAddress: string;
+}
+
+interface OAuthFlowResult {
+  createdSessionId?: string;
+  signIn?: OAuthSignIn;
+  signUp?: OAuthSignUp;
+  setActive?: (params: { session: string }) => Promise<void>;
+}
+
 /**
  * Extract Clerk ID from request
  * Supports both query parameters and request body
@@ -47,7 +90,7 @@ export async function checkUserAuthStatus(clerkId: string): Promise<{
   code: 'success' | 'needs_onboarding' | 'user_not_found' | 'error';
   message: string;
   needsOnboarding: boolean;
-  data?: any;
+  data?: UserData;
 }> {
   try {
     // Check if user exists in database
@@ -59,7 +102,7 @@ export async function checkUserAuthStatus(clerkId: string): Promise<{
 		`;
 
     if (userCheckResponse.length > 0) {
-      const userData = userCheckResponse[0];
+      const userData = userCheckResponse[0] as UserData;
 
       // Check if user has completed onboarding (same logic as main app)
       if (userData.weight && userData.height && userData.fitness_goal) {
@@ -113,7 +156,7 @@ export async function createUserInDatabase(userData: {
   success: boolean;
   code: 'success' | 'user_creation_failed' | 'user_already_exists';
   message: string;
-  data?: any;
+  data?: UserData;
 }> {
   try {
     // First check if user already exists
@@ -186,6 +229,239 @@ export async function createUserInDatabase(userData: {
       success: false,
       code: 'user_creation_failed',
       message: 'Failed to create user profile',
+    };
+  }
+}
+
+/**
+ * Handle OAuth authentication flow (matches main app's auth.ts)
+ * This function handles both Google and Apple OAuth flows
+ */
+export async function handleOAuthFlow(
+  oauthResult: OAuthFlowResult,
+  provider: 'google' | 'apple'
+): Promise<OAuthResult> {
+  try {
+    const { createdSessionId, signIn, signUp, setActive } = oauthResult;
+
+    // If sign in was successful, set the active session
+    if (createdSessionId) {
+      if (setActive) {
+        await setActive({ session: createdSessionId });
+
+        // Check if this is a new user (sign up) or existing user (sign in)
+        if (signUp?.createdUserId) {
+          // This is a new user signing up
+          return await handleNewUserSignUp(signUp);
+        } else if (signIn?.userId) {
+          // This is an existing user signing in
+          return await handleExistingUserSignIn(signIn);
+        }
+
+        // Fallback for any other case
+        return {
+          success: true,
+          code: 'success',
+          message: 'You have successfully authenticated',
+          needsOnboarding: false,
+        };
+      }
+    }
+
+    return {
+      success: false,
+      code: 'error',
+      message: 'An error occurred during authentication',
+    };
+  } catch (error: unknown) {
+    console.error(`${provider} OAuth error:`, error);
+
+    // Handle specific OAuth errors
+    if (error instanceof Error && 'code' in error && error.code === 'ERR_CANCELED') {
+      return {
+        success: false,
+        code: 'user_canceled',
+        message: 'Sign in was canceled',
+      };
+    }
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      code: 'error',
+      message: errorMessage || `${provider} Sign In failed`,
+    };
+  }
+}
+
+/**
+ * Handle new user sign up flow
+ */
+async function handleNewUserSignUp(signUp: OAuthSignUp): Promise<OAuthResult> {
+  try {
+    // Check if user already exists in our database
+    const userCheckResponse = await checkUserAuthStatus(signUp.createdUserId);
+
+    if (userCheckResponse.success && userCheckResponse.data) {
+      // User exists in database, check if they need onboarding
+      if (userCheckResponse.needsOnboarding) {
+        return {
+          success: true,
+          code: 'needs_onboarding',
+          message: 'Please complete your profile setup',
+          needsOnboarding: true,
+        };
+      } else {
+        return {
+          success: true,
+          code: 'success',
+          message: 'You have successfully authenticated',
+          needsOnboarding: false,
+        };
+      }
+    } else {
+      // User doesn't exist in database, create them
+      const userCreationResult = await createUserInDatabase({
+        clerkId: signUp.createdUserId,
+        firstName: signUp.firstName || '',
+        lastName: signUp.lastName || '',
+        email: signUp.emailAddress,
+      });
+
+      if (userCreationResult.success) {
+        // User created successfully, needs onboarding
+        return {
+          success: true,
+          code: 'needs_onboarding',
+          message: 'Please complete your profile setup',
+          needsOnboarding: true,
+        };
+      } else {
+        // User creation failed
+        return {
+          success: false,
+          code: 'user_creation_failed',
+          message: 'Failed to create user profile',
+        };
+      }
+    }
+  } catch (error) {
+    console.error('New user sign up error:', error);
+    // If we can't check/create the user, assume they need onboarding
+    return {
+      success: true,
+      code: 'needs_onboarding',
+      message: 'Please complete your profile setup',
+      needsOnboarding: true,
+    };
+  }
+}
+
+/**
+ * Handle existing user sign in flow
+ */
+async function handleExistingUserSignIn(signIn: OAuthSignIn): Promise<OAuthResult> {
+  try {
+    // Check if user exists in our database and has completed onboarding
+    const userCheckResponse = await checkUserAuthStatus(signIn.userId);
+
+    if (userCheckResponse.success && userCheckResponse.data) {
+      // User exists in database, check if they need onboarding
+      if (userCheckResponse.needsOnboarding) {
+        return {
+          success: true,
+          code: 'needs_onboarding',
+          message: 'Please complete your profile setup',
+          needsOnboarding: true,
+        };
+      } else {
+        return {
+          success: true,
+          code: 'success',
+          message: 'You have successfully authenticated',
+          needsOnboarding: false,
+        };
+      }
+    } else {
+      // User doesn't exist in database, create them
+      const userCreationResult = await createUserInDatabase({
+        clerkId: signIn.userId,
+        firstName: signIn.firstName || '',
+        lastName: signIn.lastName || '',
+        email: signIn.emailAddress,
+      });
+
+      if (userCreationResult.success) {
+        // User created successfully, needs onboarding
+        return {
+          success: true,
+          code: 'needs_onboarding',
+          message: 'Please complete your profile setup',
+          needsOnboarding: true,
+        };
+      } else {
+        // User creation failed
+        return {
+          success: false,
+          code: 'user_creation_failed',
+          message: 'Failed to create user profile',
+        };
+      }
+    }
+  } catch (error) {
+    console.error('Existing user sign in error:', error);
+    // If we can't check/create the user, assume they need onboarding
+    return {
+      success: true,
+      code: 'needs_onboarding',
+      message: 'Please complete your profile setup',
+      needsOnboarding: true,
+    };
+  }
+}
+
+/**
+ * Google OAuth handler (matches main app's googleOAuth function)
+ */
+export async function googleOAuth(startOAuthFlow: () => Promise<OAuthFlowResult>): Promise<OAuthResult> {
+  try {
+    const oauthResult = await startOAuthFlow();
+    return await handleOAuthFlow(oauthResult, 'google');
+  } catch (error: unknown) {
+    console.error('Google OAuth error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      code: 'error',
+      message: errorMessage || 'Google Sign In failed',
+    };
+  }
+}
+
+/**
+ * Apple OAuth handler (matches main app's appleOAuth function)
+ */
+export async function appleOAuth(startOAuthFlow: () => Promise<OAuthFlowResult>): Promise<OAuthResult> {
+  try {
+    const oauthResult = await startOAuthFlow();
+    return await handleOAuthFlow(oauthResult, 'apple');
+  } catch (error: unknown) {
+    console.error('Apple OAuth error:', error);
+
+    // Handle specific Apple Authentication errors
+    if (error instanceof Error && 'code' in error && error.code === 'ERR_CANCELED') {
+      return {
+        success: false,
+        code: 'user_canceled',
+        message: 'Sign in was canceled',
+      };
+    }
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      code: 'error',
+      message: errorMessage || 'Apple Sign In failed',
     };
   }
 }

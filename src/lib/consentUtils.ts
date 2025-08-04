@@ -39,7 +39,7 @@ export function getOnboardingConsentStatus(consentData: DataConsent | null): {
 /**
  * Validate consent data structure
  */
-export function validateConsentData(data: any): boolean {
+export function validateConsentData(data: Record<string, unknown>): boolean {
   if (!data || typeof data !== 'object') return false;
 
   const requiredFields = [

@@ -108,10 +108,21 @@ export function getUserInitials(userProfile: UserProfile | null): string {
   return 'U';
 }
 
+interface OnboardingData {
+  clerkId?: string;
+  dob?: string;
+  age?: number;
+  weight?: number;
+  height?: number;
+  gender?: string;
+  fitnessGoal?: string;
+  targetWeight?: number;
+}
+
 /**
  * Validate user data for onboarding
  */
-export function validateOnboardingData(data: any): { isValid: boolean; errors: string[] } {
+export function validateOnboardingData(data: OnboardingData): { isValid: boolean; errors: string[] } {
   const errors: string[] = [];
 
   if (!data.clerkId) errors.push('Clerk ID is required');
