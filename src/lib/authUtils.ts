@@ -169,7 +169,7 @@ export async function createUserInDatabase(userData: {
         success: true,
         code: 'user_already_exists',
         message: 'User already exists',
-        data: existingUser[0],
+        data: existingUser[0] as UserData,
       };
     }
 
@@ -197,7 +197,7 @@ export async function createUserInDatabase(userData: {
       success: true,
       code: 'success',
       message: 'User created successfully',
-      data: result[0],
+      data: result[0] as UserData,
     };
   } catch (error) {
     console.error('User creation error:', error);
@@ -216,7 +216,7 @@ export async function createUserInDatabase(userData: {
               success: true,
               code: 'user_already_exists',
               message: 'User already exists',
-              data: existingUser[0],
+              data: existingUser[0] as UserData,
             };
           }
         } catch (fetchError) {

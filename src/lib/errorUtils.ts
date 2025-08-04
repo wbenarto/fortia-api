@@ -118,16 +118,25 @@ export function validateRequiredFields(
 export function handleDatabaseError(error: unknown): NextResponse {
   console.error('Database error:', error);
 
-  if (error.message?.includes('duplicate key')) {
-    return ErrorResponses.conflict('Resource already exists');
-  }
+  // Check for specific database error types
+  if (error instanceof Error) {
+    const errorMessage = error.message.toLowerCase();
 
-  if (error.message?.includes('foreign key')) {
-    return ErrorResponses.badRequest('Invalid reference');
-  }
+    if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
+      return ErrorResponses.conflict('Resource already exists');
+    }
 
-  if (error.message?.includes('connection')) {
-    return ErrorResponses.serviceUnavailable('Database connection failed');
+    if (errorMessage.includes('foreign key') || errorMessage.includes('constraint')) {
+      return ErrorResponses.badRequest('Invalid reference');
+    }
+
+    if (errorMessage.includes('not null') || errorMessage.includes('null value')) {
+      return ErrorResponses.badRequest('Missing required data');
+    }
+
+    if (errorMessage.includes('connection') || errorMessage.includes('timeout')) {
+      return ErrorResponses.serviceUnavailable('Database connection error');
+    }
   }
 
   return ErrorResponses.internalError('Database operation failed');
