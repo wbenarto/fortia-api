@@ -35,3 +35,66 @@ export function isToday(dateString: string): boolean {
   const today = getTodayDate();
   return dateString === today;
 }
+
+/**
+ * Get the start of the week (Sunday) for a given date
+ */
+export function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day;
+  return new Date(d.setDate(diff));
+}
+
+/**
+ * Get the end of the week (Saturday) for a given date
+ */
+export function getWeekEnd(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + 6;
+  return new Date(d.setDate(diff));
+}
+
+/**
+ * Get all dates in a week
+ */
+export function getWeekDates(date: Date): Date[] {
+  const start = getWeekStart(date);
+  const dates: Date[] = [];
+
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    dates.push(date);
+  }
+
+  return dates;
+}
+
+/**
+ * Format date as YYYY-MM-DD
+ */
+export function formatDateToISO(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+/**
+ * Check if a date is in the past
+ */
+export function isPastDate(dateString: string): boolean {
+  const date = parseLocalDate(dateString);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date < today;
+}
+
+/**
+ * Check if a date is in the future
+ */
+export function isFutureDate(dateString: string): boolean {
+  const date = parseLocalDate(dateString);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date > today;
+}

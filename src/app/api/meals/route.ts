@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
-import { getTodayDate, getDayBounds } from '@/lib/dateUtils';
+import { getTodayDate, getDayBounds, parseLocalDate } from '@/lib/dateUtils';
+import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
     const summary = searchParams.get('summary');
 
     if (!clerkId) {
-      return NextResponse.json({ error: 'Clerk ID is required' }, { status: 400 });
+      return ErrorResponses.badRequest('Clerk ID is required');
     }
 
     // Get day bounds for proper timezone handling
@@ -63,14 +64,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: meals });
   } catch (error) {
-    console.error('Get meals error:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch meals',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return handleDatabaseError(error);
   }
 }
 
@@ -91,11 +85,28 @@ export async function POST(request: NextRequest) {
       confidenceScore,
       mealType,
       notes,
+      date, // User's local date (YYYY-MM-DD format)
     } = await request.json();
 
     if (!clerkId) {
-      return NextResponse.json({ error: 'Clerk ID is required' }, { status: 400 });
+      return ErrorResponses.badRequest('Clerk ID is required');
     }
+
+    // Use provided date or today's date in user's local timezone
+    const mealDate = date || getTodayDate();
+
+    // Create a timestamp for the meal that represents the user's local date
+    // We'll use the middle of the day to avoid timezone edge cases
+    const localDate = parseLocalDate(mealDate);
+    localDate.setHours(12, 0, 0, 0); // Set to noon in user's local timezone
+    const mealTimestamp = localDate.toISOString();
+
+    console.log('Meal logging with date info:', {
+      providedDate: date,
+      finalDate: mealDate,
+      timestamp: mealTimestamp,
+      localDate: localDate.toISOString(),
+    });
 
     // Validate and convert numeric fields
     const validatedData = {
@@ -115,32 +126,32 @@ export async function POST(request: NextRequest) {
       validatedData.calories < 0 ||
       validatedData.calories > 10000
     ) {
-      return NextResponse.json({ error: 'Invalid calories value' }, { status: 400 });
+      return ErrorResponses.badRequest('Invalid calories value');
     }
     if (isNaN(validatedData.protein) || validatedData.protein < 0 || validatedData.protein > 1000) {
-      return NextResponse.json({ error: 'Invalid protein value' }, { status: 400 });
+      return ErrorResponses.badRequest('Invalid protein value');
     }
     if (isNaN(validatedData.carbs) || validatedData.carbs < 0 || validatedData.carbs > 1000) {
-      return NextResponse.json({ error: 'Invalid carbs value' }, { status: 400 });
+      return ErrorResponses.badRequest('Invalid carbs value');
     }
     if (isNaN(validatedData.fats) || validatedData.fats < 0 || validatedData.fats > 1000) {
-      return NextResponse.json({ error: 'Invalid fats value' }, { status: 400 });
+      return ErrorResponses.badRequest('Invalid fats value');
     }
     if (isNaN(validatedData.fiber) || validatedData.fiber < 0 || validatedData.fiber > 100) {
-      return NextResponse.json({ error: 'Invalid fiber value' }, { status: 400 });
+      return ErrorResponses.badRequest('Invalid fiber value');
     }
     if (isNaN(validatedData.sugar) || validatedData.sugar < 0 || validatedData.sugar > 1000) {
-      return NextResponse.json({ error: 'Invalid sugar value' }, { status: 400 });
+      return ErrorResponses.badRequest('Invalid sugar value');
     }
     if (isNaN(validatedData.sodium) || validatedData.sodium < 0 || validatedData.sodium > 10000) {
-      return NextResponse.json({ error: 'Invalid sodium value' }, { status: 400 });
+      return ErrorResponses.badRequest('Invalid sodium value');
     }
     if (
       isNaN(validatedData.confidenceScore) ||
       validatedData.confidenceScore < 0 ||
       validatedData.confidenceScore > 1
     ) {
-      return NextResponse.json({ error: 'Invalid confidence score' }, { status: 400 });
+      return ErrorResponses.badRequest('Invalid confidence score');
     }
 
     const newMeal = await sql`
@@ -151,15 +162,14 @@ export async function POST(request: NextRequest) {
 				${clerkId}, ${foodName}, ${portionSize}, ${validatedData.calories}, 
 				${validatedData.protein}, ${validatedData.carbs}, ${validatedData.fats},
 				${validatedData.fiber}, ${validatedData.sugar}, ${validatedData.sodium}, 
-				${validatedData.confidenceScore}, ${mealType}, ${notes}, NOW(), NOW()
+				${validatedData.confidenceScore}, ${mealType}, ${notes}, ${mealTimestamp}, ${mealTimestamp}
 			)
 			RETURNING *
 		`;
 
     return NextResponse.json({ success: true, data: newMeal[0] });
   } catch (error) {
-    console.error('Create meal error:', error);
-    return NextResponse.json({ error: 'Failed to create meal' }, { status: 500 });
+    return handleDatabaseError(error);
   }
 }
 
@@ -171,7 +181,7 @@ export async function DELETE(request: NextRequest) {
     const clerkId = searchParams.get('clerkId');
 
     if (!mealId || !clerkId) {
-      return NextResponse.json({ error: 'Meal ID and Clerk ID are required' }, { status: 400 });
+      return ErrorResponses.badRequest('Meal ID and Clerk ID are required');
     }
 
     const result = await sql`
@@ -181,12 +191,11 @@ export async function DELETE(request: NextRequest) {
 		`;
 
     if (result.length === 0) {
-      return NextResponse.json({ error: 'Meal not found or unauthorized' }, { status: 404 });
+      return ErrorResponses.notFound('Meal not found or unauthorized');
     }
 
     return NextResponse.json({ success: true, data: result[0] });
   } catch (error) {
-    console.error('Delete meal error:', error);
-    return NextResponse.json({ error: 'Failed to delete meal' }, { status: 500 });
+    return handleDatabaseError(error);
   }
 }
