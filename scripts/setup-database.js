@@ -1,0 +1,288 @@
+const { neon } = require('@neondatabase/serverless');
+require('dotenv').config();
+
+const sql = neon(process.env.DATABASE_URL);
+
+const schema = `
+-- Users table for storing user information
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT NOT NULL UNIQUE,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  dob DATE,
+  age INTEGER,
+  weight DECIMAL(5,2),
+  starting_weight DECIMAL(5,2),
+  target_weight DECIMAL(5,2),
+  height DECIMAL(5,2),
+  gender TEXT,
+  activity_level TEXT,
+  fitness_goal TEXT,
+  daily_calories INTEGER DEFAULT 2000,
+  daily_protein DECIMAL(5,2) DEFAULT 150.0,
+  daily_carbs DECIMAL(5,2) DEFAULT 250.0,
+  daily_fats DECIMAL(5,2) DEFAULT 65.0,
+  bmr DECIMAL(8,2),
+  tdee DECIMAL(8,2),
+  custom_calories INTEGER,
+  custom_protein DECIMAL(5,2),
+  custom_carbs DECIMAL(5,2),
+  custom_fats DECIMAL(5,2),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Meals table for storing user meal logs
+CREATE TABLE IF NOT EXISTS meals (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT NOT NULL,
+  food_name TEXT NOT NULL,
+  portion_size TEXT NOT NULL,
+  calories INTEGER,
+  protein DECIMAL(5,2),
+  carbs DECIMAL(5,2),
+  fats DECIMAL(5,2),
+  fiber DECIMAL(5,2),
+  sugar DECIMAL(5,2),
+  sodium INTEGER,
+  confidence_score DECIMAL(3,2),
+  meal_type TEXT CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Weights table for tracking user weight over time
+CREATE TABLE IF NOT EXISTS weights (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT NOT NULL,
+  weight DECIMAL(5,2) NOT NULL,
+  date DATE NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Steps table for tracking user step data
+CREATE TABLE IF NOT EXISTS steps (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT NOT NULL,
+  steps INTEGER NOT NULL,
+  goal INTEGER DEFAULT 10000,
+  calories_burned INTEGER,
+  date DATE NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(clerk_id, date)
+);
+
+-- Activities table for tracking user workout activities
+CREATE TABLE IF NOT EXISTS activities (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT NOT NULL,
+  activity_description TEXT NOT NULL,
+  estimated_calories INTEGER,
+  date DATE NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- API logs table for monitoring
+CREATE TABLE IF NOT EXISTS api_logs (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT,
+  request_text TEXT,
+  response_data JSONB,
+  tokens_used INTEGER,
+  cost DECIMAL(10,4),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Privacy consent table for storing user consent records
+CREATE TABLE IF NOT EXISTS privacy_consent (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT NOT NULL UNIQUE,
+  privacy_policy_accepted BOOLEAN DEFAULT FALSE,
+  terms_accepted BOOLEAN DEFAULT FALSE,
+  ip_address INET,
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Data consent table for granular consent management
+CREATE TABLE IF NOT EXISTS data_consent (
+  id SERIAL PRIMARY KEY,
+  clerk_id VARCHAR(255) UNIQUE NOT NULL,
+  data_collection_consent BOOLEAN DEFAULT FALSE,
+  consent_version VARCHAR(50) DEFAULT '1.0',
+  consent_method VARCHAR(100) DEFAULT 'onboarding',
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Workout sessions table
+CREATE TABLE IF NOT EXISTS workout_sessions (
+  id SERIAL PRIMARY KEY,
+  clerk_id VARCHAR(255) NOT NULL,
+  title TEXT NOT NULL,
+  workout_type TEXT CHECK (workout_type IN ('exercise', 'barbell')),
+  scheduled_date DATE NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Workout exercises table
+CREATE TABLE IF NOT EXISTS workout_exercises (
+  id SERIAL PRIMARY KEY,
+  workout_session_id INTEGER NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
+  exercise_name TEXT NOT NULL,
+  sets INTEGER,
+  reps INTEGER,
+  weight DECIMAL(5,2),
+  duration INTEGER,
+  order_index INTEGER DEFAULT 1,
+  is_completed BOOLEAN DEFAULT FALSE,
+  completed_at TIMESTAMP,
+  calories_burned INTEGER,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Deep focus sessions table
+CREATE TABLE IF NOT EXISTS deep_focus_sessions (
+  id SERIAL PRIMARY KEY,
+  clerk_id VARCHAR(255) NOT NULL,
+  duration_seconds INTEGER NOT NULL,
+  duration_minutes DECIMAL(5,2) GENERATED ALWAYS AS (duration_seconds / 60.0) STORED,
+  session_start_time TIMESTAMP,
+  session_end_time TIMESTAMP,
+  session_date DATE GENERATED ALWAYS AS (DATE(session_start_time)) STORED,
+  is_completed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Migrations table for tracking executed migrations
+CREATE TABLE IF NOT EXISTS migrations (
+  id TEXT PRIMARY KEY,
+  description TEXT NOT NULL,
+  executed_at TIMESTAMP DEFAULT NOW()
+);
+`;
+
+// Create indexes for better performance
+const indexes = `
+-- Users table indexes
+CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
+
+-- Meals table indexes
+CREATE INDEX IF NOT EXISTS idx_meals_clerk_id ON meals(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_meals_created_at ON meals(created_at);
+CREATE INDEX IF NOT EXISTS idx_meals_meal_type ON meals(meal_type);
+
+-- Weights table indexes
+CREATE INDEX IF NOT EXISTS idx_weights_clerk_id ON weights(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_weights_date ON weights(date);
+CREATE INDEX IF NOT EXISTS idx_weights_clerk_date ON weights(clerk_id, date);
+
+-- Steps table indexes
+CREATE INDEX IF NOT EXISTS idx_steps_clerk_id ON steps(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_steps_date ON steps(date);
+CREATE INDEX IF NOT EXISTS idx_steps_clerk_date ON steps(clerk_id, date);
+
+-- Activities table indexes
+CREATE INDEX IF NOT EXISTS idx_activities_clerk_id ON activities(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(date);
+CREATE INDEX IF NOT EXISTS idx_activities_created_at ON activities(created_at);
+
+-- API logs table indexes
+CREATE INDEX IF NOT EXISTS idx_api_logs_clerk_id ON api_logs(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at);
+
+-- Privacy consent table indexes
+CREATE INDEX IF NOT EXISTS idx_privacy_consent_clerk_id ON privacy_consent(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_privacy_consent_created_at ON privacy_consent(created_at);
+
+-- Data consent table indexes
+CREATE INDEX IF NOT EXISTS idx_data_consent_clerk_id ON data_consent(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_data_consent_created_at ON data_consent(created_at);
+
+-- Workout sessions table indexes
+CREATE INDEX IF NOT EXISTS idx_workout_sessions_clerk_id ON workout_sessions(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_workout_sessions_date ON workout_sessions(scheduled_date);
+
+-- Workout exercises table indexes
+CREATE INDEX IF NOT EXISTS idx_workout_exercises_session_id ON workout_exercises(workout_session_id);
+CREATE INDEX IF NOT EXISTS idx_workout_exercises_order ON workout_exercises(order_index);
+
+-- Deep focus sessions table indexes
+CREATE INDEX IF NOT EXISTS idx_deep_focus_clerk_id ON deep_focus_sessions(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_deep_focus_date ON deep_focus_sessions(session_date);
+CREATE INDEX IF NOT EXISTS idx_deep_focus_created_at ON deep_focus_sessions(created_at);
+`;
+
+async function setupDatabase() {
+	try {
+		console.log('🚀 Setting up database schema...\n');
+
+		// Split schema into individual statements
+		const schemaStatements = schema
+			.split(';')
+			.map(stmt => stmt.trim())
+			.filter(stmt => stmt.length > 0);
+
+		// Execute schema statements
+		for (const statement of schemaStatements) {
+			if (statement.trim()) {
+				console.log(`📋 Executing: ${statement.substring(0, 50)}...`);
+				await sql.unsafe(statement);
+			}
+		}
+
+		console.log('\n✅ Schema created successfully!\n');
+
+		// Split indexes into individual statements
+		const indexStatements = indexes
+			.split(';')
+			.map(stmt => stmt.trim())
+			.filter(stmt => stmt.length > 0);
+
+		// Execute index statements
+		console.log('🔍 Creating indexes...\n');
+		for (const statement of indexStatements) {
+			if (statement.trim()) {
+				console.log(`📋 Executing: ${statement.substring(0, 50)}...`);
+				await sql.unsafe(statement);
+			}
+		}
+
+		console.log('\n✅ All indexes created successfully!');
+		console.log('\n🎉 Database setup completed successfully!');
+		console.log('\n📊 Database tables created:');
+		console.log('  ✅ users');
+		console.log('  ✅ meals');
+		console.log('  ✅ weights');
+		console.log('  ✅ steps');
+		console.log('  ✅ activities');
+		console.log('  ✅ api_logs');
+		console.log('  ✅ privacy_consent');
+		console.log('  ✅ data_consent');
+		console.log('  ✅ workout_sessions');
+		console.log('  ✅ workout_exercises');
+		console.log('  ✅ deep_focus_sessions');
+		console.log('  ✅ migrations');
+	} catch (error) {
+		console.error('❌ Database setup failed:', error);
+		process.exit(1);
+	}
+}
+
+// Run setup if this file is executed directly
+if (require.main === module) {
+	setupDatabase();
+}
+
+module.exports = { setupDatabase }; 

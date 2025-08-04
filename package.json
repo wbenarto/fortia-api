@@ -6,7 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:setup": "node scripts/setup-database.js",
+    "db:migrate": "node scripts/migrate-database.js migrate",
+    "db:status": "node scripts/migrate-database.js status"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1",
