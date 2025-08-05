@@ -30,8 +30,7 @@ export async function POST(request: NextRequest) {
   try {
     const {
       clerkId,
-      privacyPolicyAccepted = true,
-      termsAccepted = true,
+      consentGiven = true,
       consentVersion = '1.0',
       consentMethod = 'onboarding',
     } = await request.json();
@@ -42,15 +41,12 @@ export async function POST(request: NextRequest) {
 
     const result = await sql`
 			INSERT INTO privacy_consent (
-				clerk_id, privacy_policy_accepted, terms_accepted,
-				consent_version, consent_method, created_at, updated_at
+				clerk_id, consent_given, consent_version, consent_method, created_at, updated_at
 			) VALUES (
-				${clerkId}, ${privacyPolicyAccepted}, ${termsAccepted},
-				${consentVersion}, ${consentMethod}, NOW(), NOW()
+				${clerkId}, ${consentGiven}, ${consentVersion}, ${consentMethod}, NOW(), NOW()
 			)
 			ON CONFLICT (clerk_id) DO UPDATE SET
-				privacy_policy_accepted = EXCLUDED.privacy_policy_accepted,
-				terms_accepted = EXCLUDED.terms_accepted,
+				consent_given = EXCLUDED.consent_given,
 				consent_version = EXCLUDED.consent_version,
 				consent_method = EXCLUDED.consent_method,
 				updated_at = NOW()

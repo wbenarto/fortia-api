@@ -19,11 +19,11 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     const baseURL = getBaseURL();
     const url = `${baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-    console.log(`🌐 API Call: ${url}`); // Development logging
-    console.log(`🌐 Base URL: ${baseURL}`);
-    console.log(`🌐 Endpoint: ${endpoint}`);
-    console.log(`🌐 Full URL: ${url}`);
-    console.log(`🌐 Request options:`, options);
+    		console.log(`API Call: ${url}`); // Development logging
+		console.log(`Base URL: ${baseURL}`);
+		console.log(`Endpoint: ${endpoint}`);
+		console.log(`Full URL: ${url}`);
+    		console.log(`Request options:`, options);
 
     const response = await fetch(url, {
       ...options,
@@ -33,23 +33,23 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       },
     });
 
-    console.log(`📡 Response status: ${response.status}`);
-    console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
+    		console.log(`Response status: ${response.status}`);
+    		console.log(`Response headers:`, Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
-      console.error(`❌ HTTP error! status: ${response.status}`);
+      		console.error(`HTTP error! status: ${response.status}`);
       const errorText = await response.text();
-      console.error(`❌ Error response body:`, errorText);
+      		console.error(`Error response body:`, errorText);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log(`✅ Response data:`, data);
+    console.log(`Response data:`, data);
     return data;
   } catch (error) {
-    console.error('❌ Fetch error:', error);
-    console.error('❌ Error type:', typeof error);
-    console.error('❌ Error constructor:', error?.constructor?.name);
+    		console.error('Fetch error:', error);
+		console.error('Error type:', typeof error);
+		console.error('Error constructor:', error?.constructor?.name);
     throw error;
   }
 };
@@ -87,7 +87,7 @@ export const serverFetch = async (endpoint: string, options?: RequestInit) => {
     const baseURL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
     const url = `${baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-    console.log(`🌐 Server API Call: ${url}`);
+    		console.log(`Server API Call: ${url}`);
 
     const response = await fetch(url, {
       ...options,
@@ -103,7 +103,7 @@ export const serverFetch = async (endpoint: string, options?: RequestInit) => {
 
     return await response.json();
   } catch (error) {
-    console.error('❌ Server fetch error:', error);
+    		console.error('Server fetch error:', error);
     throw error;
   }
 }; 

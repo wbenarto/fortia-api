@@ -146,9 +146,9 @@ export function handleDatabaseError(error: unknown): NextResponse {
  * Log API request for debugging
  */
 export function logApiRequest(method: string, url: string, data?: unknown): void {
-  console.log(`🌐 ${method} ${url}`);
+  		console.log(`${method} ${url}`);
   if (data) {
-    console.log('📤 Request data:', JSON.stringify(data, null, 2));
+          console.log('Request data:', JSON.stringify(data, null, 2));
   }
 }
 
@@ -156,8 +156,8 @@ export function logApiRequest(method: string, url: string, data?: unknown): void
  * Log API response for debugging
  */
 export function logApiResponse(status: number, data?: unknown): void {
-  console.log(`📡 Response status: ${status}`);
+  		console.log(`Response status: ${status}`);
   if (data) {
-    console.log('📥 Response data:', JSON.stringify(data, null, 2));
+    console.log('Response data:', JSON.stringify(data, null, 2));
   }
 }

@@ -93,27 +93,32 @@ CREATE TABLE IF NOT EXISTS api_logs (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Privacy consent table for storing user consent records
+-- Privacy consent table for tracking user privacy policy consent
 CREATE TABLE IF NOT EXISTS privacy_consent (
   id SERIAL PRIMARY KEY,
-  clerk_id TEXT NOT NULL UNIQUE,
-  privacy_policy_accepted BOOLEAN DEFAULT FALSE,
-  terms_accepted BOOLEAN DEFAULT FALSE,
-  ip_address INET,
+  clerk_id TEXT NOT NULL,
+  consent_given BOOLEAN NOT NULL DEFAULT true,
+  consent_version TEXT NOT NULL DEFAULT '1.0',
+  consent_method TEXT NOT NULL DEFAULT 'onboarding',
+  ip_address TEXT,
   user_agent TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(clerk_id)
 );
 
--- Data consent table for granular consent management
+-- Data consent table for granular data collection preferences
 CREATE TABLE IF NOT EXISTS data_consent (
   id SERIAL PRIMARY KEY,
-  clerk_id VARCHAR(255) UNIQUE NOT NULL,
-  data_collection_consent BOOLEAN DEFAULT FALSE,
-  consent_version VARCHAR(50) DEFAULT '1.0',
-  consent_method VARCHAR(100) DEFAULT 'onboarding',
-  ip_address VARCHAR(45),
-  user_agent TEXT,
+  clerk_id TEXT NOT NULL UNIQUE,
+  basic_profile BOOLEAN NOT NULL DEFAULT true,
+  health_metrics BOOLEAN NOT NULL DEFAULT false,
+  nutrition_data BOOLEAN NOT NULL DEFAULT false,
+  weight_tracking BOOLEAN NOT NULL DEFAULT false,
+  step_tracking BOOLEAN NOT NULL DEFAULT false,
+  workout_activities BOOLEAN NOT NULL DEFAULT false,
+  consent_version TEXT NOT NULL DEFAULT '1.0',
+  consent_method TEXT NOT NULL DEFAULT 'onboarding',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

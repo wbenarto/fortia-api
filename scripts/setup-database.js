@@ -96,27 +96,32 @@ CREATE TABLE IF NOT EXISTS api_logs (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Privacy consent table for storing user consent records
+-- Privacy consent table for tracking user privacy policy consent
 CREATE TABLE IF NOT EXISTS privacy_consent (
   id SERIAL PRIMARY KEY,
-  clerk_id TEXT NOT NULL UNIQUE,
-  privacy_policy_accepted BOOLEAN DEFAULT FALSE,
-  terms_accepted BOOLEAN DEFAULT FALSE,
-  ip_address INET,
+  clerk_id TEXT NOT NULL,
+  consent_given BOOLEAN NOT NULL DEFAULT true,
+  consent_version TEXT NOT NULL DEFAULT '1.0',
+  consent_method TEXT NOT NULL DEFAULT 'onboarding',
+  ip_address TEXT,
   user_agent TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(clerk_id)
 );
 
--- Data consent table for granular consent management
+-- Data consent table for granular data collection preferences
 CREATE TABLE IF NOT EXISTS data_consent (
   id SERIAL PRIMARY KEY,
-  clerk_id VARCHAR(255) UNIQUE NOT NULL,
-  data_collection_consent BOOLEAN DEFAULT FALSE,
-  consent_version VARCHAR(50) DEFAULT '1.0',
-  consent_method VARCHAR(100) DEFAULT 'onboarding',
-  ip_address VARCHAR(45),
-  user_agent TEXT,
+  clerk_id TEXT NOT NULL UNIQUE,
+  basic_profile BOOLEAN NOT NULL DEFAULT true,
+  health_metrics BOOLEAN NOT NULL DEFAULT false,
+  nutrition_data BOOLEAN NOT NULL DEFAULT false,
+  weight_tracking BOOLEAN NOT NULL DEFAULT false,
+  step_tracking BOOLEAN NOT NULL DEFAULT false,
+  workout_activities BOOLEAN NOT NULL DEFAULT false,
+  consent_version TEXT NOT NULL DEFAULT '1.0',
+  consent_method TEXT NOT NULL DEFAULT 'onboarding',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -226,7 +231,7 @@ CREATE INDEX IF NOT EXISTS idx_deep_focus_created_at ON deep_focus_sessions(crea
 
 async function setupDatabase() {
 	try {
-		console.log('🚀 Setting up database schema...\n');
+		  console.log('Setting up database schema...\n');
 
 		// Split schema into individual statements
 		const schemaStatements = schema
@@ -237,12 +242,12 @@ async function setupDatabase() {
 		// Execute schema statements
 		for (const statement of schemaStatements) {
 			if (statement.trim()) {
-				console.log(`📋 Executing: ${statement.substring(0, 50)}...`);
+				console.log(`Executing: ${statement.substring(0, 50)}...`);
 				await sql.unsafe(statement);
 			}
 		}
 
-		console.log('\n✅ Schema created successfully!\n');
+		console.log('\nSchema created successfully!\n');
 
 		// Split indexes into individual statements
 		const indexStatements = indexes
@@ -251,31 +256,31 @@ async function setupDatabase() {
 			.filter(stmt => stmt.length > 0);
 
 		// Execute index statements
-		console.log('🔍 Creating indexes...\n');
+		console.log('Creating indexes...\n');
 		for (const statement of indexStatements) {
 			if (statement.trim()) {
-				console.log(`📋 Executing: ${statement.substring(0, 50)}...`);
+				console.log(`Executing: ${statement.substring(0, 50)}...`);
 				await sql.unsafe(statement);
 			}
 		}
 
-		console.log('\n✅ All indexes created successfully!');
-		console.log('\n🎉 Database setup completed successfully!');
-		console.log('\n📊 Database tables created:');
-		console.log('  ✅ users');
-		console.log('  ✅ meals');
-		console.log('  ✅ weights');
-		console.log('  ✅ steps');
-		console.log('  ✅ activities');
-		console.log('  ✅ api_logs');
-		console.log('  ✅ privacy_consent');
-		console.log('  ✅ data_consent');
-		console.log('  ✅ workout_sessions');
-		console.log('  ✅ workout_exercises');
-		console.log('  ✅ deep_focus_sessions');
-		console.log('  ✅ migrations');
+			console.log('\nAll indexes created successfully!');
+	console.log('\nDatabase setup completed successfully!');
+	console.log('\nDatabase tables created:');
+	console.log('  - users');
+	console.log('  - meals');
+	console.log('  - weights');
+	console.log('  - steps');
+	console.log('  - activities');
+	console.log('  - api_logs');
+	console.log('  - privacy_consent');
+	console.log('  - data_consent');
+	console.log('  - workout_sessions');
+	console.log('  - workout_exercises');
+	console.log('  - deep_focus_sessions');
+	console.log('  - migrations');
 	} catch (error) {
-		console.error('❌ Database setup failed:', error);
+		console.error('Database setup failed:', error);
 		process.exit(1);
 	}
 }

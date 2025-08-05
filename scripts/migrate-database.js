@@ -6,7 +6,84 @@ const sql = neon(process.env.DATABASE_URL);
 // Migration functions
 const migrations = [
 	{
-		id: '001_create_data_consent_table',
+		id: '001_fix_consent_tables',
+		description: 'Fix privacy_consent and data_consent tables to match Fortia schema',
+		up: async () => {
+			console.log('Running migration: Fix consent tables to match Fortia schema...');
+
+			// Fix privacy_consent table
+			console.log('Fixing privacy_consent table...');
+			
+			// Check if we need to rename columns
+			const hasPrivacyPolicyAccepted = await sql`
+				SELECT EXISTS (
+					SELECT FROM information_schema.columns 
+					WHERE table_name = 'privacy_consent' 
+					AND column_name = 'privacy_policy_accepted'
+				)
+			`;
+
+			if (hasPrivacyPolicyAccepted[0].exists) {
+				// Rename privacy_policy_accepted to consent_given
+				await sql`ALTER TABLE privacy_consent RENAME COLUMN privacy_policy_accepted TO consent_given`;
+				console.log('Renamed privacy_policy_accepted to consent_given');
+			}
+
+			// Remove terms_accepted column if it exists
+			const hasTermsAccepted = await sql`
+				SELECT EXISTS (
+					SELECT FROM information_schema.columns 
+					WHERE table_name = 'privacy_consent' 
+					AND column_name = 'terms_accepted'
+				)
+			`;
+
+			if (hasTermsAccepted[0].exists) {
+				await sql`ALTER TABLE privacy_consent DROP COLUMN terms_accepted`;
+				console.log('Removed terms_accepted column');
+			}
+
+			// Fix data types for consent_version and consent_method
+			await sql`ALTER TABLE privacy_consent ALTER COLUMN consent_version TYPE TEXT`;
+			await sql`ALTER TABLE privacy_consent ALTER COLUMN consent_method TYPE TEXT`;
+			console.log('Fixed data types for consent_version and consent_method');
+
+			// Fix ip_address type
+			await sql`ALTER TABLE privacy_consent ALTER COLUMN ip_address TYPE TEXT`;
+			console.log('Fixed ip_address type to TEXT');
+
+			// Fix data_consent table
+			console.log('Fixing data_consent table...');
+			
+			// Drop the old data_consent table and recreate it
+			await sql`DROP TABLE IF EXISTS data_consent CASCADE`;
+			
+			await sql`
+				CREATE TABLE data_consent (
+					id SERIAL PRIMARY KEY,
+					clerk_id TEXT NOT NULL UNIQUE,
+					basic_profile BOOLEAN NOT NULL DEFAULT true,
+					health_metrics BOOLEAN NOT NULL DEFAULT false,
+					nutrition_data BOOLEAN NOT NULL DEFAULT false,
+					weight_tracking BOOLEAN NOT NULL DEFAULT false,
+					step_tracking BOOLEAN NOT NULL DEFAULT false,
+					workout_activities BOOLEAN NOT NULL DEFAULT false,
+					consent_version TEXT NOT NULL DEFAULT '1.0',
+					consent_method TEXT NOT NULL DEFAULT 'onboarding',
+					created_at TIMESTAMP DEFAULT NOW(),
+					updated_at TIMESTAMP DEFAULT NOW()
+				)
+			`;
+
+			// Create indexes
+			await sql`CREATE INDEX idx_data_consent_clerk_id ON data_consent(clerk_id)`;
+			await sql`CREATE INDEX idx_data_consent_created_at ON data_consent(created_at)`;
+
+			console.log('Recreated data_consent table with correct schema');
+		},
+	},
+	{
+		id: '002_create_data_consent_table',
 		description: 'Create data_consent table for simplified consent management',
 		up: async () => {
 			console.log('Running migration: Create data_consent table...');
@@ -21,7 +98,7 @@ const migrations = [
 			`;
 
 			if (tableExists[0].exists) {
-				console.log('✅ data_consent table already exists, skipping...');
+				console.log('data_consent table already exists, skipping...');
 				return;
 			}
 
@@ -44,12 +121,12 @@ const migrations = [
 			await sql`CREATE INDEX idx_data_consent_clerk_id ON data_consent(clerk_id)`;
 			await sql`CREATE INDEX idx_data_consent_created_at ON data_consent(created_at)`;
 
-			console.log('✅ data_consent table created successfully');
+			console.log('data_consent table created successfully');
 		},
 	},
 
 	{
-		id: '002_update_privacy_consent_table',
+		id: '003_update_privacy_consent_table',
 		description: 'Update privacy_consent table to use INET for ip_address',
 		up: async () => {
 			console.log('Running migration: Update privacy_consent table...');
@@ -63,23 +140,23 @@ const migrations = [
       `;
 
 			if (columnInfo.length === 0) {
-				console.log("✅ ip_address column doesn't exist, skipping...");
+				console.log("ip_address column doesn't exist, skipping...");
 				return;
 			}
 
 			if (columnInfo[0].data_type === 'inet') {
-				console.log('✅ ip_address column already has correct type, skipping...');
+				console.log('ip_address column already has correct type, skipping...');
 				return;
 			}
 
 			// Convert TEXT to INET
 			await sql`ALTER TABLE privacy_consent ALTER COLUMN ip_address TYPE INET USING ip_address::INET`;
-			console.log('✅ privacy_consent.ip_address column updated to INET type');
+			console.log('privacy_consent.ip_address column updated to INET type');
 		},
 	},
 
 	{
-		id: '003_add_missing_indexes',
+		id: '004_add_missing_indexes',
 		description: 'Add missing indexes for better performance',
 		up: async () => {
 			console.log('Running migration: Add missing indexes...');
@@ -101,9 +178,9 @@ const migrations = [
 
 				if (!indexExists[0].exists) {
 					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`✅ Created index: ${index.name}`);
+					console.log(`Created index: ${index.name}`);
 				} else {
-					console.log(`⏭️  Index ${index.name} already exists, skipping...`);
+					console.log(`Index ${index.name} already exists, skipping...`);
 				}
 			}
 
@@ -124,9 +201,9 @@ const migrations = [
 
 				if (!indexExists[0].exists) {
 					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`✅ Created index: ${index.name}`);
+					console.log(`Created index: ${index.name}`);
 				} else {
-					console.log(`⏭️  Index ${index.name} already exists, skipping...`);
+					console.log(`Index ${index.name} already exists, skipping...`);
 				}
 			}
 
@@ -151,9 +228,9 @@ const migrations = [
 					} else {
 						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
 					}
-					console.log(`✅ Created index: ${index.name}`);
+					console.log(`Created index: ${index.name}`);
 				} else {
-					console.log(`⏭️  Index ${index.name} already exists, skipping...`);
+					console.log(`Index ${index.name} already exists, skipping...`);
 				}
 			}
 
@@ -178,9 +255,9 @@ const migrations = [
 					} else {
 						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
 					}
-					console.log(`✅ Created index: ${index.name}`);
+					console.log(`Created index: ${index.name}`);
 				} else {
-					console.log(`⏭️  Index ${index.name} already exists, skipping...`);
+					console.log(`Index ${index.name} already exists, skipping...`);
 				}
 			}
 
@@ -201,9 +278,9 @@ const migrations = [
 
 				if (!indexExists[0].exists) {
 					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`✅ Created index: ${index.name}`);
+					console.log(`Created index: ${index.name}`);
 				} else {
-					console.log(`⏭️  Index ${index.name} already exists, skipping...`);
+					console.log(`Index ${index.name} already exists, skipping...`);
 				}
 			}
 
@@ -223,18 +300,18 @@ const migrations = [
 
 				if (!indexExists[0].exists) {
 					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`✅ Created index: ${index.name}`);
+					console.log(`Created index: ${index.name}`);
 				} else {
-					console.log(`⏭️  Index ${index.name} already exists, skipping...`);
+					console.log(`Index ${index.name} already exists, skipping...`);
 				}
 			}
 
-			console.log('✅ All indexes checked and created successfully');
+			console.log('All indexes checked and created successfully');
 		},
 	},
 
 	{
-		id: '004_add_workout_tables',
+		id: '005_add_workout_tables',
 		description: 'Add workout sessions and exercises tables',
 		up: async () => {
 			console.log('Running migration: Add workout tables...');
@@ -260,9 +337,9 @@ const migrations = [
 						updated_at TIMESTAMP DEFAULT NOW()
 					)
 				`;
-				console.log('✅ workout_sessions table created');
+				console.log('workout_sessions table created');
 			} else {
-				console.log('⏭️  workout_sessions table already exists, skipping...');
+				console.log('workout_sessions table already exists, skipping...');
 			}
 
 			// Check if workout_exercises table exists
@@ -292,9 +369,9 @@ const migrations = [
 						updated_at TIMESTAMP DEFAULT NOW()
 					)
 				`;
-				console.log('✅ workout_exercises table created');
+				console.log('workout_exercises table created');
 			} else {
-				console.log('⏭️  workout_exercises table already exists, skipping...');
+				console.log('workout_exercises table already exists, skipping...');
 			}
 
 			// Create indexes for workout tables
@@ -315,16 +392,16 @@ const migrations = [
 
 				if (!indexExists[0].exists) {
 					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`✅ Created index: ${index.name}`);
+					console.log(`Created index: ${index.name}`);
 				} else {
-					console.log(`⏭️  Index ${index.name} already exists, skipping...`);
+					console.log(`Index ${index.name} already exists, skipping...`);
 				}
 			}
 		},
 	},
 
 	{
-		id: '005_add_deep_focus_table',
+		id: '006_add_deep_focus_table',
 		description: 'Add deep focus sessions table',
 		up: async () => {
 			console.log('Running migration: Add deep focus table...');
@@ -353,9 +430,9 @@ const migrations = [
 						updated_at TIMESTAMP DEFAULT NOW()
 					)
 				`;
-				console.log('✅ deep_focus_sessions table created');
+				console.log('deep_focus_sessions table created');
 			} else {
-				console.log('⏭️  deep_focus_sessions table already exists, skipping...');
+				console.log('deep_focus_sessions table already exists, skipping...');
 			}
 
 			// Create indexes for deep focus table
@@ -375,9 +452,9 @@ const migrations = [
 
 				if (!indexExists[0].exists) {
 					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`✅ Created index: ${index.name}`);
+					console.log(`Created index: ${index.name}`);
 				} else {
-					console.log(`⏭️  Index ${index.name} already exists, skipping...`);
+					console.log(`Index ${index.name} already exists, skipping...`);
 				}
 			}
 		},
@@ -404,9 +481,9 @@ async function createMigrationsTable() {
         executed_at TIMESTAMP DEFAULT NOW()
       )
     `;
-		console.log('✅ migrations table created');
+		console.log('migrations table created');
 	} else {
-		console.log('✅ migrations table already exists');
+		console.log('migrations table already exists');
 	}
 }
 
@@ -427,7 +504,7 @@ async function markMigrationExecuted(migrationId, description) {
 // Run migrations
 async function runMigrations() {
 	try {
-		console.log('🚀 Starting database migrations...\n');
+		console.log('Starting database migrations...\n');
 
 		// Create migrations table if it doesn't exist
 		await createMigrationsTable();
@@ -438,21 +515,21 @@ async function runMigrations() {
 		// Run pending migrations
 		for (const migration of migrations) {
 			if (!executedMigrations.includes(migration.id)) {
-				console.log(`\n📋 Migration: ${migration.description}`);
-				console.log(`🆔 ID: ${migration.id}`);
+				console.log(`\nMigration: ${migration.description}`);
+				console.log(`ID: ${migration.id}`);
 
 				await migration.up();
 				await markMigrationExecuted(migration.id, migration.description);
 
-				console.log(`✅ Migration ${migration.id} completed successfully\n`);
+				console.log(`Migration ${migration.id} completed successfully\n`);
 			} else {
-				console.log(`⏭️  Migration ${migration.id} already executed, skipping...`);
+				console.log(`Migration ${migration.id} already executed, skipping...`);
 			}
 		}
 
-		console.log('🎉 All migrations completed successfully!');
+		console.log('All migrations completed successfully!');
 	} catch (error) {
-		console.error('❌ Migration failed:', error);
+		console.error('Migration failed:', error);
 		process.exit(1);
 	}
 }
@@ -460,7 +537,7 @@ async function runMigrations() {
 // Show migration status
 async function showMigrationStatus() {
 	try {
-		console.log('📊 Migration Status:\n');
+		console.log('Migration Status:\n');
 
 		await createMigrationsTable();
 		const executedMigrations = await getExecutedMigrations();
@@ -470,7 +547,7 @@ async function showMigrationStatus() {
 			console.log('  None');
 		} else {
 			executedMigrations.forEach(id => {
-				console.log(`  ✅ ${id}`);
+				console.log(`  - ${id}`);
 			});
 		}
 
@@ -480,11 +557,11 @@ async function showMigrationStatus() {
 			console.log('  None');
 		} else {
 			pendingMigrations.forEach(migration => {
-				console.log(`  ⏳ ${migration.id}: ${migration.description}`);
+				console.log(`  - ${migration.id}: ${migration.description}`);
 			});
 		}
 	} catch (error) {
-		console.error('❌ Error checking migration status:', error);
+		console.error('Error checking migration status:', error);
 	}
 }
 
