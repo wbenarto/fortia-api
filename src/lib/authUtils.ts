@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { neon } from '@neondatabase/serverless';
-import { ErrorResponses, handleDatabaseError } from './errorUtils';
-import { hasCompletedOnboarding } from './userUtils';
+import { ErrorResponses } from './errorUtils';
+
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -503,7 +503,7 @@ export async function extractClerkIdFromBody(
     }
 
     return { clerkId, error: null };
-  } catch (error) {
+  } catch {
     return { clerkId: null, error: ErrorResponses.badRequest('Invalid request body') };
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { googleOAuth, appleOAuth, handleOAuthFlow } from '@/lib/authUtils';
+import { handleOAuthFlow } from '@/lib/authUtils';
 import { ErrorResponses } from '@/lib/errorUtils';
 
 export async function POST(request: NextRequest) {

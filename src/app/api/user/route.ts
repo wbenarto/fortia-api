@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
-import { ErrorResponses, handleDatabaseError, validateRequiredFields } from '@/lib/errorUtils';
+import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
 import { validateOnboardingData } from '@/lib/userUtils';
 import { createUserInDatabase, checkUserAuthStatus } from '@/lib/authUtils';
 

@@ -14,8 +14,8 @@ export class ApiErrorResponse extends Error {
 
   constructor(
     message: string,
-    statusCode: number = 500,
-    code: string = 'INTERNAL_ERROR',
+    statusCode = 500,
+    code = 'INTERNAL_ERROR',
     details?: unknown
   ) {
     super(message);
@@ -30,7 +30,7 @@ export class ApiErrorResponse extends Error {
  */
 export function createErrorResponse(
   error: ApiErrorResponse | Error | string,
-  statusCode: number = 500
+  statusCode = 500
 ): NextResponse {
   let apiError: ApiError;
 
@@ -66,28 +66,28 @@ export function createErrorResponse(
  * Common error responses
  */
 export const ErrorResponses = {
-  badRequest: (message: string = 'Bad Request') =>
+  badRequest: (message = 'Bad Request') =>
     createErrorResponse(new ApiErrorResponse(message, 400, 'BAD_REQUEST')),
 
-  unauthorized: (message: string = 'Unauthorized') =>
+  unauthorized: (message = 'Unauthorized') =>
     createErrorResponse(new ApiErrorResponse(message, 401, 'UNAUTHORIZED')),
 
-  forbidden: (message: string = 'Forbidden') =>
+  forbidden: (message = 'Forbidden') =>
     createErrorResponse(new ApiErrorResponse(message, 403, 'FORBIDDEN')),
 
-  notFound: (message: string = 'Not Found') =>
+  notFound: (message = 'Not Found') =>
     createErrorResponse(new ApiErrorResponse(message, 404, 'NOT_FOUND')),
 
-  conflict: (message: string = 'Conflict') =>
+  conflict: (message = 'Conflict') =>
     createErrorResponse(new ApiErrorResponse(message, 409, 'CONFLICT')),
 
-  tooManyRequests: (message: string = 'Too Many Requests') =>
+  tooManyRequests: (message = 'Too Many Requests') =>
     createErrorResponse(new ApiErrorResponse(message, 429, 'RATE_LIMITED')),
 
-  internalError: (message: string = 'Internal Server Error') =>
+  internalError: (message = 'Internal Server Error') =>
     createErrorResponse(new ApiErrorResponse(message, 500, 'INTERNAL_ERROR')),
 
-  serviceUnavailable: (message: string = 'Service Unavailable') =>
+  serviceUnavailable: (message = 'Service Unavailable') =>
     createErrorResponse(new ApiErrorResponse(message, 503, 'SERVICE_UNAVAILABLE')),
 };
 

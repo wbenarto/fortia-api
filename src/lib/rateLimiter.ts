@@ -9,7 +9,7 @@ class RateLimiter {
   private readonly maxRequests: number;
   private readonly windowMs: number;
 
-  constructor(maxRequests: number = 20, windowMs: number = 24 * 60 * 60 * 1000) {
+  constructor(maxRequests = 20, windowMs = 24 * 60 * 60 * 1000) {
     this.maxRequests = maxRequests;
     this.windowMs = windowMs; // 24 hours in milliseconds
   }

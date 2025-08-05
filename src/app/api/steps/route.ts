@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
           });
         }
       }
-    } catch (error) {
+    } catch {
       // Use provided caloriesBurned or fallback to 0
       calculatedCalories = caloriesBurned || 0;
     }
