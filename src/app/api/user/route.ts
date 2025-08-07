@@ -35,10 +35,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { clerkId, firstName, lastName, email } = await request.json();
+    const requestBody = await request.json();
+    console.log('Backend POST /api/user - Request received');
+
+    const { clerkId, firstName, lastName, email } = requestBody;
+
+    console.log('Backend extracted user values successfully');
 
     if (!clerkId) {
+      console.error('Backend: Missing clerkId');
       return ErrorResponses.badRequest('Clerk ID is required');
+    }
+
+    if (!email) {
+      console.error('Backend: Missing email');
+      return ErrorResponses.badRequest('Email is required');
     }
 
     // Use the auth utility to create user (matches main app flow)
@@ -46,8 +57,10 @@ export async function POST(request: NextRequest) {
       clerkId,
       firstName: firstName || '',
       lastName: lastName || '',
-      email: email || '',
+      email: email,
     });
+
+    console.log('Backend user creation completed');
 
     if (!userCreationResult.success) {
       return ErrorResponses.internalError(userCreationResult.message);

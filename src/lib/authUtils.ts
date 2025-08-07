@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { neon } from '@neondatabase/serverless';
 import { ErrorResponses } from './errorUtils';
 
-
 const sql = neon(process.env.DATABASE_URL!);
 
 // Types for OAuth responses
@@ -145,6 +144,93 @@ export async function checkUserAuthStatus(clerkId: string): Promise<{
 }
 
 /**
+ * Create minimal user record with just clerkId (for OAuth flow)
+ */
+export async function createMinimalUser(clerkId: string): Promise<{
+  success: boolean;
+  code: 'success' | 'user_creation_failed' | 'user_already_exists';
+  message: string;
+  data?: UserData;
+}> {
+  try {
+    console.log('Backend createMinimalUser called');
+
+    // First check if user already exists
+    const existingUser = await sql`
+			SELECT id FROM users WHERE clerk_id = ${clerkId}
+		`;
+
+    console.log('Backend existing user check completed');
+
+    if (existingUser.length > 0) {
+      console.log('Backend: User already exists');
+      return {
+        success: true,
+        code: 'user_already_exists',
+        message: 'User already exists',
+        data: existingUser[0] as UserData,
+      };
+    }
+
+    console.log('Backend: Creating minimal user in database...');
+
+    // Create minimal user record with just clerkId
+    const result = await sql`
+			INSERT INTO users (
+				clerk_id,
+				created_at,
+				updated_at
+			) VALUES (
+				${clerkId},
+				NOW(),
+				NOW()
+			)
+			RETURNING *
+		`;
+
+    console.log('Backend: Minimal user creation successful');
+
+    return {
+      success: true,
+      code: 'success',
+      message: 'Minimal user created successfully',
+      data: result[0] as UserData,
+    };
+  } catch (error) {
+    console.error('Backend: Minimal user creation error:', error);
+
+    // Check for specific database errors
+    if (error instanceof Error) {
+      if (error.message.includes('duplicate key')) {
+        // If we still get a duplicate key error, try to fetch the existing user
+        try {
+          const existingUser = await sql`
+						SELECT id FROM users WHERE clerk_id = ${clerkId}
+					`;
+
+          if (existingUser.length > 0) {
+            return {
+              success: true,
+              code: 'user_already_exists',
+              message: 'User already exists',
+              data: existingUser[0] as UserData,
+            };
+          }
+        } catch (fetchError) {
+          console.error('Backend: Error fetching existing user:', fetchError);
+        }
+      }
+    }
+
+    return {
+      success: false,
+      code: 'user_creation_failed',
+      message: 'Failed to create minimal user profile',
+    };
+  }
+}
+
+/**
  * Create user in database (matches main app's user creation flow)
  */
 export async function createUserInDatabase(userData: {
@@ -159,12 +245,17 @@ export async function createUserInDatabase(userData: {
   data?: UserData;
 }> {
   try {
+    console.log('Backend createUserInDatabase called');
+
     // First check if user already exists
     const existingUser = await sql`
 			SELECT id FROM users WHERE email = ${userData.email} OR clerk_id = ${userData.clerkId}
 		`;
 
+    console.log('Backend existing user check completed');
+
     if (existingUser.length > 0) {
+      console.log('Backend: User already exists');
       return {
         success: true,
         code: 'user_already_exists',
@@ -172,6 +263,8 @@ export async function createUserInDatabase(userData: {
         data: existingUser[0] as UserData,
       };
     }
+
+    console.log('Backend: Creating new user in database...');
 
     // Create new user
     const result = await sql`
@@ -192,6 +285,8 @@ export async function createUserInDatabase(userData: {
 			)
 			RETURNING *
 		`;
+
+    console.log('Backend: Database insert successful');
 
     return {
       success: true,
@@ -424,7 +519,9 @@ async function handleExistingUserSignIn(signIn: OAuthSignIn): Promise<OAuthResul
 /**
  * Google OAuth handler (matches main app's googleOAuth function)
  */
-export async function googleOAuth(startOAuthFlow: () => Promise<OAuthFlowResult>): Promise<OAuthResult> {
+export async function googleOAuth(
+  startOAuthFlow: () => Promise<OAuthFlowResult>
+): Promise<OAuthResult> {
   try {
     const oauthResult = await startOAuthFlow();
     return await handleOAuthFlow(oauthResult, 'google');
@@ -442,7 +539,9 @@ export async function googleOAuth(startOAuthFlow: () => Promise<OAuthFlowResult>
 /**
  * Apple OAuth handler (matches main app's appleOAuth function)
  */
-export async function appleOAuth(startOAuthFlow: () => Promise<OAuthFlowResult>): Promise<OAuthResult> {
+export async function appleOAuth(
+  startOAuthFlow: () => Promise<OAuthFlowResult>
+): Promise<OAuthResult> {
   try {
     const oauthResult = await startOAuthFlow();
     return await handleOAuthFlow(oauthResult, 'apple');
