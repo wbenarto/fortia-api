@@ -2,7 +2,7 @@ import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
 import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
 import { validateOnboardingData } from '@/lib/userUtils';
-import { createUserInDatabase, checkUserAuthStatus } from '@/lib/authUtils';
+import { checkUserAuthStatus } from '@/lib/authUtils';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -34,8 +34,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  let email: string = '';
-  let clerkId: string = '';
+  let email = '';
+  let clerkId = '';
 
   try {
     const {
