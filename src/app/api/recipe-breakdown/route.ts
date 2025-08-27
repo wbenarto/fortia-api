@@ -125,7 +125,10 @@ export async function POST(request: NextRequest) {
       return res;
     });
 
-    console.log('Gemini API response status:', response.status);
+    // Only log status, not response content
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Gemini API response status:', response.status);
+    }
 
     const data = await response.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -142,7 +145,11 @@ export async function POST(request: NextRequest) {
       result = { error: 'Failed to parse response', raw: text };
     }
 
-    console.log('Final result:', result);
+    // Don't log the final result as it contains user data
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Recipe breakdown completed successfully');
+    }
+    
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
     console.error('Recipe breakdown error:', error);

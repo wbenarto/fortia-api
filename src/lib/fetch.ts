@@ -19,11 +19,10 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     const baseURL = getBaseURL();
     const url = `${baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-    		console.log(`API Call: ${url}`); // Development logging
-		console.log(`Base URL: ${baseURL}`);
-		console.log(`Endpoint: ${endpoint}`);
-		console.log(`Full URL: ${url}`);
-    		console.log(`Request options:`, options);
+    // Only log endpoint for debugging, not full URL or request details
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`API Call to endpoint: ${endpoint}`);
+    }
 
     const response = await fetch(url, {
       ...options,
@@ -33,23 +32,24 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       },
     });
 
-    		console.log(`Response status: ${response.status}`);
-    		console.log(`Response headers:`, Object.fromEntries(response.headers.entries()));
+    // Only log status code, not headers or response data
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Response status: ${response.status}`);
+    }
 
     if (!response.ok) {
-      		console.error(`HTTP error! status: ${response.status}`);
+      console.error(`HTTP error! status: ${response.status}`);
       const errorText = await response.text();
-      		console.error(`Error response body:`, errorText);
+      // Don't log full error response body as it might contain sensitive data
+      console.error(`Error response length: ${errorText.length} characters`);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log(`Response data:`, data);
+    // Don't log response data as it might contain sensitive information
     return data;
   } catch (error) {
-    		console.error('Fetch error:', error);
-		console.error('Error type:', typeof error);
-		console.error('Error constructor:', error?.constructor?.name);
+    console.error('Fetch error:', error instanceof Error ? error.message : 'Unknown error');
     throw error;
   }
 };
@@ -87,7 +87,10 @@ export const serverFetch = async (endpoint: string, options?: RequestInit) => {
     const baseURL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
     const url = `${baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-    		console.log(`Server API Call: ${url}`);
+    // Only log endpoint, not full URL
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Server API Call to endpoint: ${endpoint}`);
+    }
 
     const response = await fetch(url, {
       ...options,
@@ -98,12 +101,14 @@ export const serverFetch = async (endpoint: string, options?: RequestInit) => {
     });
 
     if (!response.ok) {
+      console.error(`Server fetch error! status: ${response.status}`);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    return data;
   } catch (error) {
-    		console.error('Server fetch error:', error);
+    console.error('Server fetch error:', error instanceof Error ? error.message : 'Unknown error');
     throw error;
   }
 }; 

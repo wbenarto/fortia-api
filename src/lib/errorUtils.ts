@@ -146,9 +146,15 @@ export function handleDatabaseError(error: unknown): NextResponse {
  * Log API request for debugging
  */
 export function logApiRequest(method: string, url: string, data?: unknown): void {
-  		console.log(`${method} ${url}`);
-  if (data) {
-          console.log('Request data:', JSON.stringify(data, null, 2));
+  // Only log method and endpoint, not full URL or request data
+  const endpoint = url.split('?')[0]; // Remove query parameters
+  console.log(`${method} ${endpoint}`);
+  
+  // Only log data structure in development, not actual content
+  if (data && process.env.NODE_ENV === 'development') {
+    const dataType = Array.isArray(data) ? 'array' : typeof data;
+    const dataKeys = data && typeof data === 'object' ? Object.keys(data) : [];
+    console.log(`Request data type: ${dataType}, keys: [${dataKeys.join(', ')}]`);
   }
 }
 
@@ -156,8 +162,12 @@ export function logApiRequest(method: string, url: string, data?: unknown): void
  * Log API response for debugging
  */
 export function logApiResponse(status: number, data?: unknown): void {
-  		console.log(`Response status: ${status}`);
-  if (data) {
-    console.log('Response data:', JSON.stringify(data, null, 2));
+  console.log(`Response status: ${status}`);
+  
+  // Only log data structure in development, not actual content
+  if (data && process.env.NODE_ENV === 'development') {
+    const dataType = Array.isArray(data) ? 'array' : typeof data;
+    const dataKeys = data && typeof data === 'object' ? Object.keys(data) : [];
+    console.log(`Response data type: ${dataType}, keys: [${dataKeys.join(', ')}]`);
   }
 }

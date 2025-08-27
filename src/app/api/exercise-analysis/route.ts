@@ -151,7 +151,10 @@ Be realistic with the calorie estimates. Consider the exercise type, intensity, 
       }
 
       console.log('=== EXERCISE ANALYSIS SUCCESS ===');
-      console.log('Exercise data:', exerciseData);
+      // Don't log exercise data as it contains user information
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Exercise analysis completed successfully');
+      }
 
       return NextResponse.json({
         success: true,

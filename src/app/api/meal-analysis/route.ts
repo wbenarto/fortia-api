@@ -161,7 +161,10 @@ Be accurate and realistic with the values. Do not include any text before or aft
       }
 
       console.log('=== MEAL ANALYSIS SUCCESS ===');
-      console.log('Nutrition data:', nutritionData);
+      // Don't log nutrition data as it contains user information
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Nutrition analysis completed successfully');
+      }
 
       return NextResponse.json({
         success: true,

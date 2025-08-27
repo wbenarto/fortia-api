@@ -34,46 +34,162 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let email: string = '';
+  let clerkId: string = '';
+
   try {
-    const requestBody = await request.json();
-    console.log('Backend POST /api/user - Request received');
+    const {
+      clerkId: clerkIdParam,
+      firstName,
+      lastName,
+      email: emailParam,
+      dob,
+      age,
+      weight,
+      startingWeight,
+      targetWeight,
+      height,
+      gender,
+      activityLevel,
+      fitnessGoal,
+      dailyCalories,
+      dailyProtein,
+      dailyCarbs,
+      dailyFats,
+      bmr,
+      tdee,
+    } = await request.json();
 
-    const { clerkId, firstName, lastName, email } = requestBody;
-
-    console.log('Backend extracted user values successfully');
+    clerkId = clerkIdParam;
+    email = emailParam;
 
     if (!clerkId) {
-      console.error('Backend: Missing clerkId');
       return ErrorResponses.badRequest('Clerk ID is required');
     }
 
-    if (!email) {
-      console.error('Backend: Missing email');
-      return ErrorResponses.badRequest('Email is required');
-    }
-
-    // Use the auth utility to create user (matches main app flow)
-    const userCreationResult = await createUserInDatabase({
+    // Validate onboarding data
+    const validation = validateOnboardingData({
       clerkId,
-      firstName: firstName || '',
-      lastName: lastName || '',
-      email: email,
+      dob,
+      age,
+      weight,
+      height,
+      gender,
+      fitnessGoal,
+      targetWeight,
     });
 
-    console.log('Backend user creation completed');
-
-    if (!userCreationResult.success) {
-      return ErrorResponses.internalError(userCreationResult.message);
+    if (!validation.isValid) {
+      return ErrorResponses.badRequest(`Validation failed: ${validation.errors.join(', ')}`);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: userCreationResult.data,
-      code: userCreationResult.code,
-      message: userCreationResult.message,
-    });
+    // First check if user already exists
+    const existingUser = await sql`
+			SELECT id FROM users WHERE email = ${email} OR clerk_id = ${clerkId}
+		`;
+
+    if (existingUser.length > 0) {
+      return NextResponse.json(
+        {
+          success: true,
+          data: existingUser[0],
+          message: 'User already exists',
+        },
+        { status: 200 }
+      );
+    }
+
+    // Create complete user with all onboarding information
+    const result = await sql`
+      INSERT INTO users (
+        first_name,
+        last_name,
+        email,
+        clerk_id,
+        dob,
+        age,
+        weight,
+        starting_weight,
+        target_weight,
+        height,
+        gender,
+        activity_level,
+        fitness_goal,
+        daily_calories,
+        daily_protein,
+        daily_carbs,
+        daily_fats,
+        bmr,
+        tdee,
+        created_at,
+        updated_at
+      ) VALUES (
+        ${firstName},
+        ${lastName},
+        ${email},
+        ${clerkId},
+        ${dob},
+        ${age},
+        ${weight},
+        ${startingWeight},
+        ${targetWeight},
+        ${height},
+        ${gender},
+        ${activityLevel},
+        ${fitnessGoal},
+        ${dailyCalories},
+        ${dailyProtein},
+        ${dailyCarbs},
+        ${dailyFats},
+        ${bmr},
+        ${tdee},
+        NOW(),
+        NOW()
+      )
+      RETURNING *
+    `;
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: result[0],
+        message: 'User created successfully',
+      },
+      { status: 201 }
+    );
   } catch (error) {
-    return handleDatabaseError(error);
+    console.error('User creation error:', error);
+
+    // Check for specific database errors
+    if (error instanceof Error) {
+      if (error.message.includes('duplicate key')) {
+        // If we still get a duplicate key error, try to fetch the existing user
+        try {
+          const existingUser = await sql`
+            SELECT id FROM users WHERE email = ${email} OR clerk_id = ${clerkId}
+          `;
+
+          if (existingUser.length > 0) {
+            return NextResponse.json(
+              {
+                success: true,
+                data: existingUser[0],
+                message: 'User already exists',
+              },
+              { status: 200 }
+            );
+          }
+        } catch (fetchError) {
+          console.error('Error fetching existing user:', fetchError);
+        }
+
+        return ErrorResponses.conflict('User already exists with this email');
+      } else if (error.message.includes('connection')) {
+        return ErrorResponses.internalError('Database connection failed');
+      }
+    }
+
+    return ErrorResponses.internalError('Failed to create user');
   }
 }
 
