@@ -299,7 +299,6 @@ export async function handleOAuthFlow(
 async function handleNewUserSignUp(signUp: OAuthSignUp): Promise<OAuthResult> {
   try {
     // Check if user already exists in our database
-    console.log(' attempting signUp', signUp);
     const userCheckResponse = await checkUserAuthStatus(signUp.createdUserId);
 
     if (userCheckResponse.success && userCheckResponse.data) {
@@ -542,5 +541,5 @@ export function requireAuth(
  * Log authentication attempts for debugging
  */
 export function logAuthAttempt(clerkId: string, success: boolean, endpoint: string): void {
-  console.log(`Auth attempt: ${success ? 'SUCCESS' : 'FAILED'} [REDACTED] -> ${endpoint}`);
+  // Logging removed for production
 }

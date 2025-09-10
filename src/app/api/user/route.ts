@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
       return ErrorResponses.badRequest('Clerk ID is required');
     }
 
+    // This endpoint is for complete onboarding data only
+    // For basic user creation (sign-up), use /api/user/basic
     // Validate onboarding data
     const validation = validateOnboardingData({
       clerkId,
@@ -85,15 +87,38 @@ export async function POST(request: NextRequest) {
 
     // First check if user already exists
     const existingUser = await sql`
-			SELECT id FROM users WHERE email = ${email} OR clerk_id = ${clerkId}
+			SELECT * FROM users WHERE email = ${email} OR clerk_id = ${clerkId}
 		`;
 
     if (existingUser.length > 0) {
+      // User exists, update with onboarding data instead of creating new record
+      const updatedUser = await sql`
+        UPDATE users SET
+          dob = ${dob},
+          age = ${age},
+          weight = ${weight},
+          starting_weight = ${startingWeight},
+          target_weight = ${targetWeight},
+          height = ${height},
+          gender = ${gender},
+          activity_level = ${activityLevel},
+          fitness_goal = ${fitnessGoal},
+          daily_calories = ${dailyCalories},
+          daily_protein = ${dailyProtein},
+          daily_carbs = ${dailyCarbs},
+          daily_fats = ${dailyFats},
+          bmr = ${bmr},
+          tdee = ${tdee},
+          updated_at = NOW()
+        WHERE clerk_id = ${clerkId}
+        RETURNING *
+      `;
+
       return NextResponse.json(
         {
           success: true,
-          data: existingUser[0],
-          message: 'User already exists',
+          data: updatedUser[0],
+          message: 'User profile updated successfully',
         },
         { status: 200 }
       );

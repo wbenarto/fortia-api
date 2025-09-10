@@ -20,9 +20,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     const url = `${baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
     // Only log endpoint for debugging, not full URL or request details
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`API Call to endpoint: ${endpoint}`);
-    }
 
     const response = await fetch(url, {
       ...options,
@@ -33,9 +30,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     });
 
     // Only log status code, not headers or response data
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Response status: ${response.status}`);
-    }
 
     if (!response.ok) {
       console.error(`HTTP error! status: ${response.status}`);
@@ -88,9 +82,6 @@ export const serverFetch = async (endpoint: string, options?: RequestInit) => {
     const url = `${baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
     // Only log endpoint, not full URL
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Server API Call to endpoint: ${endpoint}`);
-    }
 
     const response = await fetch(url, {
       ...options,

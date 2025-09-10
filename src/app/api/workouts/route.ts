@@ -281,7 +281,6 @@ export async function DELETE(request: NextRequest) {
 
 
       if (exerciseCheck.length === 0) {
-        console.log('Exercise not found or access denied');
         return NextResponse.json({ error: 'Exercise not found or access denied' }, { status: 404 });
       }
 
@@ -291,7 +290,6 @@ export async function DELETE(request: NextRequest) {
 				WHERE id = ${parsedExerciseId}
 			`;
 
-      console.log('Exercise deleted successfully');
 
       // Check if this was the last exercise in the session
       const remainingExercises = await sql`
@@ -306,7 +304,6 @@ export async function DELETE(request: NextRequest) {
 					DELETE FROM workout_sessions 
 					WHERE id = ${parsedSessionId} AND clerk_id = ${clerkId}
 				`;
-        console.log('Session deleted (no exercises remaining)');
         return NextResponse.json({
           success: true,
           message: 'Exercise and session deleted successfully',
@@ -331,7 +328,6 @@ export async function DELETE(request: NextRequest) {
 
 
     if (sessionCheck.length === 0) {
-      console.log('Session not found or access denied');
       return NextResponse.json(
         { error: 'Workout session not found or access denied' },
         { status: 404 }
@@ -346,7 +342,6 @@ export async function DELETE(request: NextRequest) {
 			WHERE id = ${parsedSessionId} AND clerk_id = ${clerkId}
 		`;
 
-    console.log('Session deleted successfully');
 
     return NextResponse.json({
       success: true,

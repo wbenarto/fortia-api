@@ -101,12 +101,6 @@ export async function POST(request: NextRequest) {
     localDate.setHours(12, 0, 0, 0); // Set to noon in user's local timezone
     const mealTimestamp = localDate.toISOString();
 
-    console.log('Meal logging with date info:', {
-      providedDate: date,
-      finalDate: mealDate,
-      timestamp: mealTimestamp,
-      localDate: localDate.toISOString(),
-    });
 
     // Validate and convert numeric fields
     const validatedData = {
