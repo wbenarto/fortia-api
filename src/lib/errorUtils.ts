@@ -145,14 +145,17 @@ export function handleDatabaseError(error: unknown): NextResponse {
 /**
  * Log API request for debugging
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function logApiRequest(method: string, url: string, data?: unknown): void {
   // Only log method and endpoint, not full URL or request data
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const endpoint = url.split('?')[0]; // Remove query parameters
 }
 
 /**
  * Log API response for debugging
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function logApiResponse(status: number, data?: unknown): void {
   // Logging removed for production
 }

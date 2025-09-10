@@ -540,7 +540,8 @@ export function requireAuth(
 /**
  * Log authentication attempts for debugging
  */
-export function logAuthAttempt(_clerkId: string, _success: boolean, _endpoint: string): void {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function logAuthAttempt(clerkId: string, success: boolean, endpoint: string): void {
   // Logging removed for production
-  // Parameters prefixed with _ to indicate they are intentionally unused
+  // Parameters are required for interface compatibility but not used
 }
