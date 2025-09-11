@@ -6,17 +6,18 @@ const sql = neon(process.env.DATABASE_URL!);
 
 export async function POST(request: NextRequest) {
   try {
-    const { clerkId, activityDescription, estimatedCalories } = await request.json();
+    const { clerkId, activityDescription, estimatedCalories, date } = await request.json();
     if (!activityDescription || !clerkId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const today = getTodayDate();
+    // Use provided date or fallback to today's date
+    const activityDate = date || getTodayDate();
 
     // Insert the activity into the database
     const result = await sql`
 			INSERT INTO activities (clerk_id, activity_description, estimated_calories, date)
-			VALUES (${clerkId}, ${activityDescription}, ${estimatedCalories || null}, ${today})
+			VALUES (${clerkId}, ${activityDescription}, ${estimatedCalories || null}, ${activityDate})
 			RETURNING id, activity_description, estimated_calories, date, created_at
 		`;
 
@@ -36,13 +37,14 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { clerkId, activityDescription, estimatedCalories, activityType } = await request.json();
+    const { clerkId, activityDescription, estimatedCalories, activityType, date } = await request.json();
     
     if (!clerkId || !activityType) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const today = getTodayDate();
+    // Use provided date or fallback to today's date
+    const activityDate = date || getTodayDate();
 
     // Update existing activity entry for today
     // This is specifically for updating daily entries like steps or BMR
@@ -57,7 +59,7 @@ export async function PUT(request: NextRequest) {
         FROM activities 
         WHERE 
           clerk_id = ${clerkId} 
-          AND date = ${today}
+          AND date = ${activityDate}
           AND activity_description LIKE '%Basal Metabolic Rate%'
         ORDER BY created_at DESC
         LIMIT 1
@@ -84,7 +86,7 @@ export async function PUT(request: NextRequest) {
         FROM activities 
         WHERE 
           clerk_id = ${clerkId} 
-          AND date = ${today}
+          AND date = ${activityDate}
           AND activity_description LIKE '%Daily Steps%'
         ORDER BY created_at DESC
         LIMIT 1
@@ -112,7 +114,7 @@ export async function PUT(request: NextRequest) {
           estimated_calories = ${estimatedCalories || null}
         WHERE 
           clerk_id = ${clerkId} 
-          AND date = ${today}
+          AND date = ${activityDate}
           AND activity_description LIKE ${`%${activityType}%`}
         ORDER BY created_at DESC
         LIMIT 1
