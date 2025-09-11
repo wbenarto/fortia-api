@@ -1,11 +1,5 @@
 {
   "framework": "nextjs",
-  "build": {
-    "env": {
-      "DATABASE_URL": "@database_url",
-      "NEXT_PUBLIC_SERVER_URL": "@next_public_server_url"
-    }
-  },
   "functions": {
     "src/app/api/**/*.ts": {
       "maxDuration": 30
