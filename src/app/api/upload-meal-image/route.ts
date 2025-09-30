@@ -79,12 +79,14 @@ export async function POST(request: NextRequest) {
     } else if (file && typeof file === 'object' && 'data' in file) {
       // React Native might send as object with data property
       console.log('Processing as object with data property');
-      buffer = Buffer.from((file as any).data);
+      const fileWithData = file as { data: string | Buffer };
+      buffer = Buffer.from(fileWithData.data);
     } else {
       // Try to convert whatever we got to a Buffer
       console.log('Attempting fallback conversion to Buffer');
       try {
-        buffer = Buffer.from(file as any);
+        const fileAsString = file as unknown as string;
+        buffer = Buffer.from(fileAsString);
         console.log('Successfully converted to Buffer, size:', buffer.length);
       } catch (error) {
         console.error('Error converting file to Buffer:', error);

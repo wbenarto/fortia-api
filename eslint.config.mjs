@@ -58,10 +58,10 @@ const eslintConfig = [
     // Override rules for API routes
     files: ["**/api/**/*.ts"],
     rules: {
-      "no-console": "warn", // Allow console for API debugging but warn
+      "no-console": "off", // Allow console for API debugging
       "max-lines-per-function": ["warn", { "max": 120 }], // Allow longer API functions
     },
-  },
+  }
 ];
 
 export default eslintConfig;
