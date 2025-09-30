@@ -459,6 +459,46 @@ const migrations = [
 			}
 		},
 	},
+
+	{
+		id: '007_add_image_url_to_meals',
+		description: 'Add image_url column to meals table for meal photos',
+		up: async () => {
+			console.log('Running migration: Add image_url column to meals table...');
+
+			// Check if image_url column already exists
+			const columnExists = await sql`
+				SELECT EXISTS (
+					SELECT FROM information_schema.columns 
+					WHERE table_name = 'meals' 
+					AND column_name = 'image_url'
+				)
+			`;
+
+			if (!columnExists[0].exists) {
+				// Add image_url column to meals table
+				await sql`ALTER TABLE meals ADD COLUMN image_url TEXT`;
+				console.log('image_url column added to meals table');
+			} else {
+				console.log('image_url column already exists in meals table, skipping...');
+			}
+
+			// Create index for image_url column
+			const indexExists = await sql`
+				SELECT EXISTS (
+					SELECT FROM pg_indexes 
+					WHERE indexname = 'idx_meals_image_url'
+				)
+			`;
+
+			if (!indexExists[0].exists) {
+				await sql`CREATE INDEX idx_meals_image_url ON meals(image_url)`;
+				console.log('Created index: idx_meals_image_url');
+			} else {
+				console.log('Index idx_meals_image_url already exists, skipping...');
+			}
+		},
+	},
 ];
 
 // Create migrations table

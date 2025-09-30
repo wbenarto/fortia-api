@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
       confidenceScore,
       mealType,
       notes,
+      imageUrl, // Cloudinary URL for meal photo
       date, // User's local date (YYYY-MM-DD format)
     } = await request.json();
 
@@ -151,12 +152,12 @@ export async function POST(request: NextRequest) {
     const newMeal = await sql`
 			INSERT INTO meals (
 				clerk_id, food_name, portion_size, calories, protein, carbs, fats, 
-				fiber, sugar, sodium, confidence_score, meal_type, notes, created_at, updated_at
+				fiber, sugar, sodium, confidence_score, meal_type, notes, image_url, created_at, updated_at
 			) VALUES (
 				${clerkId}, ${foodName}, ${portionSize}, ${validatedData.calories}, 
 				${validatedData.protein}, ${validatedData.carbs}, ${validatedData.fats},
 				${validatedData.fiber}, ${validatedData.sugar}, ${validatedData.sodium}, 
-				${validatedData.confidenceScore}, ${mealType}, ${notes}, ${mealTimestamp}, ${mealTimestamp}
+				${validatedData.confidenceScore}, ${mealType}, ${notes}, ${imageUrl}, ${mealTimestamp}, ${mealTimestamp}
 			)
 			RETURNING *
 		`;
@@ -190,6 +191,7 @@ export async function PUT(request: NextRequest) {
       confidenceScore,
       mealType,
       notes,
+      imageUrl,
     } = await request.json();
 
     const updatedMeal = await sql`
@@ -206,6 +208,7 @@ export async function PUT(request: NextRequest) {
         confidence_score = COALESCE(${confidenceScore}, confidence_score),
         meal_type = COALESCE(${mealType}, meal_type),
         notes = COALESCE(${notes}, notes),
+        image_url = COALESCE(${imageUrl}, image_url),
         updated_at = NOW()
       WHERE id = ${mealId}
       RETURNING *

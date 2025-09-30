@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS meals (
   confidence_score DECIMAL(3,2),
   meal_type TEXT CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
   notes TEXT,
+  image_url TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -183,6 +184,7 @@ CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
 CREATE INDEX IF NOT EXISTS idx_meals_clerk_id ON meals(clerk_id);
 CREATE INDEX IF NOT EXISTS idx_meals_created_at ON meals(created_at);
 CREATE INDEX IF NOT EXISTS idx_meals_meal_type ON meals(meal_type);
+CREATE INDEX IF NOT EXISTS idx_meals_image_url ON meals(image_url);
 
 -- Weights table indexes
 CREATE INDEX IF NOT EXISTS idx_weights_clerk_id ON weights(clerk_id);
