@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
   try {
     const {
       clerkId: clerkIdParam,
+      username,
       firstName,
       lastName,
       email: emailParam,
@@ -65,6 +66,10 @@ export async function POST(request: NextRequest) {
 
     if (!clerkId) {
       return ErrorResponses.badRequest('Clerk ID is required');
+    }
+
+    if (!username) {
+      return ErrorResponses.badRequest('Username is required');
     }
 
     // This endpoint is for complete onboarding data only
@@ -94,6 +99,7 @@ export async function POST(request: NextRequest) {
       // User exists, update with onboarding data instead of creating new record
       const updatedUser = await sql`
         UPDATE users SET
+          username = ${username.toLowerCase()},
           dob = ${dob},
           age = ${age},
           weight = ${weight},
@@ -127,6 +133,7 @@ export async function POST(request: NextRequest) {
     // Create complete user with all onboarding information
     const result = await sql`
       INSERT INTO users (
+        username,
         first_name,
         last_name,
         email,
@@ -149,6 +156,7 @@ export async function POST(request: NextRequest) {
         created_at,
         updated_at
       ) VALUES (
+        ${username.toLowerCase()},
         ${firstName},
         ${lastName},
         ${email},

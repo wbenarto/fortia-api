@@ -499,6 +499,66 @@ const migrations = [
 			}
 		},
 	},
+
+	{
+		id: '008_add_username_field',
+		description: 'Add username field to users table',
+		up: async () => {
+			console.log('Running migration: Add username field to users table...');
+
+			// Check if username column already exists
+			const columnExists = await sql`
+				SELECT EXISTS (
+					SELECT FROM information_schema.columns 
+					WHERE table_name = 'users' 
+					AND column_name = 'username'
+				)
+			`;
+
+			if (!columnExists[0].exists) {
+				// Add username column to users table
+				await sql`ALTER TABLE users ADD COLUMN username TEXT`;
+				console.log('username column added to users table');
+			} else {
+				console.log('username column already exists in users table, skipping...');
+			}
+
+			// Add unique constraint for username (allows NULL values initially)
+			const constraintExists = await sql`
+				SELECT EXISTS (
+					SELECT FROM information_schema.table_constraints 
+					WHERE table_name = 'users' 
+					AND constraint_name = 'unique_username'
+				)
+			`;
+
+			if (!constraintExists[0].exists) {
+				await sql`ALTER TABLE users ADD CONSTRAINT unique_username UNIQUE (username)`;
+				console.log('unique_username constraint added');
+			} else {
+				console.log('unique_username constraint already exists, skipping...');
+			}
+
+			// Create index for username lookups
+			const indexExists = await sql`
+				SELECT EXISTS (
+					SELECT FROM pg_indexes 
+					WHERE indexname = 'idx_users_username'
+				)
+			`;
+
+			if (!indexExists[0].exists) {
+				await sql`CREATE INDEX idx_users_username ON users(username)`;
+				console.log('Created index: idx_users_username');
+			} else {
+				console.log('Index idx_users_username already exists, skipping...');
+			}
+
+			// Add comment to document the column
+			await sql`COMMENT ON COLUMN users.username IS 'Unique username for user identification and display'`;
+			console.log('Added comment to username column');
+		},
+	},
 ];
 
 // Create migrations table

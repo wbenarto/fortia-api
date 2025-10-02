@@ -35,11 +35,13 @@ export async function GET(request: NextRequest) {
         JOIN workout_sessions ws ON we.workout_session_id = ws.id
         WHERE ws.clerk_id = ${clerkId}
       `,
-      // Total activities logged (from activities table)
+      // Total activities logged (from activities table, excluding Daily Steps and BMR)
       sql`
         SELECT COUNT(*) as total_activities
         FROM activities 
         WHERE clerk_id = ${clerkId}
+        AND activity_description NOT LIKE '%Daily Steps%'
+        AND activity_description NOT LIKE '%Basal Metabolic Rate%'
       `
     ]);
 
