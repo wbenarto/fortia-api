@@ -166,6 +166,21 @@ CREATE TABLE IF NOT EXISTS deep_focus_sessions (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Daily quests table for tracking user daily quest completion and streaks
+CREATE TABLE IF NOT EXISTS daily_quests (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT NOT NULL,
+  date DATE NOT NULL,
+  weight_logged BOOLEAN DEFAULT FALSE,
+  meal_logged BOOLEAN DEFAULT FALSE,
+  exercise_logged BOOLEAN DEFAULT FALSE,
+  day_completed BOOLEAN DEFAULT FALSE,
+  streak_day INTEGER DEFAULT 1,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(clerk_id, date)
+);
+
 -- Migrations table for tracking executed migrations
 CREATE TABLE IF NOT EXISTS migrations (
   id TEXT PRIMARY KEY,
@@ -224,4 +239,10 @@ CREATE INDEX IF NOT EXISTS idx_workout_exercises_order ON workout_exercises(orde
 -- Deep focus sessions table indexes
 CREATE INDEX IF NOT EXISTS idx_deep_focus_clerk_id ON deep_focus_sessions(clerk_id);
 CREATE INDEX IF NOT EXISTS idx_deep_focus_date ON deep_focus_sessions(session_date);
-CREATE INDEX IF NOT EXISTS idx_deep_focus_created_at ON deep_focus_sessions(created_at); 
+CREATE INDEX IF NOT EXISTS idx_deep_focus_created_at ON deep_focus_sessions(created_at);
+
+-- Daily quests table indexes
+CREATE INDEX IF NOT EXISTS idx_daily_quests_clerk_id ON daily_quests(clerk_id);
+CREATE INDEX IF NOT EXISTS idx_daily_quests_date ON daily_quests(date);
+CREATE INDEX IF NOT EXISTS idx_daily_quests_clerk_date ON daily_quests(clerk_id, date);
+CREATE INDEX IF NOT EXISTS idx_daily_quests_created_at ON daily_quests(created_at); 

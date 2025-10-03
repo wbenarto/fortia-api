@@ -55,3 +55,39 @@ HAVING COUNT(*) > 1;
 ```
 
 These queries should return no results if the migration was successful.
+
+## Migration 002: Create Daily Quests Table
+
+**File**: `002_create_daily_quests_table.sql`
+
+**Purpose**: Create the daily_quests table to track user daily quest completion and streaks.
+
+**What it does**:
+1. Creates the `daily_quests` table with quest tracking fields
+2. Adds unique constraint on `(clerk_id, date)` to prevent duplicates
+3. Creates performance indexes for efficient queries
+4. Sets up proper default values for quest tracking
+
+**How to run**:
+```bash
+# Connect to your Neon database and run:
+psql "your-database-connection-string" -f migrations/002_create_daily_quests_table.sql
+```
+
+**Or using Neon CLI**:
+```bash
+neon db execute --sql-file migrations/002_create_daily_quests_table.sql
+```
+
+## Verification
+
+After running the migration, you can verify it worked by checking:
+```sql
+-- Check if table exists and has correct structure
+\d daily_quests;
+
+-- Check if indexes were created
+SELECT indexname, indexdef 
+FROM pg_indexes 
+WHERE tablename = 'daily_quests';
+```

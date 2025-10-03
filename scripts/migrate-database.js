@@ -559,6 +559,77 @@ const migrations = [
 			console.log('Added comment to username column');
 		},
 	},
+
+	{
+		id: '009_create_daily_quests_table',
+		description: 'Create daily_quests table for tracking user daily quest completion and streaks',
+		up: async () => {
+			console.log('Running migration: Create daily_quests table...');
+
+			// Check if daily_quests table already exists
+			const tableExists = await sql`
+				SELECT EXISTS (
+					SELECT FROM information_schema.tables 
+					WHERE table_schema = 'public' 
+					AND table_name = 'daily_quests'
+				)
+			`;
+
+			if (!tableExists[0].exists) {
+				// Create daily_quests table
+				await sql`
+					CREATE TABLE daily_quests (
+						id SERIAL PRIMARY KEY,
+						clerk_id TEXT NOT NULL,
+						date DATE NOT NULL,
+						weight_logged BOOLEAN DEFAULT FALSE,
+						meal_logged BOOLEAN DEFAULT FALSE,
+						exercise_logged BOOLEAN DEFAULT FALSE,
+						day_completed BOOLEAN DEFAULT FALSE,
+						streak_day INTEGER DEFAULT 1,
+						created_at TIMESTAMP DEFAULT NOW(),
+						updated_at TIMESTAMP DEFAULT NOW(),
+						UNIQUE(clerk_id, date)
+					)
+				`;
+				console.log('daily_quests table created');
+			} else {
+				console.log('daily_quests table already exists, skipping...');
+			}
+
+			// Create indexes for daily_quests table
+			const dailyQuestIndexes = [
+				{ name: 'idx_daily_quests_clerk_id', table: 'daily_quests', column: 'clerk_id' },
+				{ name: 'idx_daily_quests_date', table: 'daily_quests', column: 'date' },
+				{ name: 'idx_daily_quests_clerk_date', table: 'daily_quests', columns: ['clerk_id', 'date'] },
+				{ name: 'idx_daily_quests_created_at', table: 'daily_quests', column: 'created_at' }
+			];
+
+			for (const index of dailyQuestIndexes) {
+				const indexExists = await sql`
+					SELECT EXISTS (
+						SELECT FROM pg_indexes 
+						WHERE indexname = ${index.name}
+					)
+				`;
+
+				if (!indexExists[0].exists) {
+					if (index.columns) {
+						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.columns.join(', '))})`;
+					} else {
+						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+					}
+					console.log(`Created index: ${index.name}`);
+				} else {
+					console.log(`Index ${index.name} already exists, skipping...`);
+				}
+			}
+
+			// Add comment to table
+			await sql`COMMENT ON TABLE daily_quests IS 'Tracks user daily quest completion status and streaks for weight logging, meal logging, and exercise logging'`;
+			console.log('Added comment to daily_quests table');
+		},
+	},
 ];
 
 // Create migrations table

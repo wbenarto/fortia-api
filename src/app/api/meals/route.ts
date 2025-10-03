@@ -162,6 +162,39 @@ export async function POST(request: NextRequest) {
 			RETURNING *
 		`;
 
+    // Update daily quest for meal logging (always update when meal is logged)
+    try {
+      await sql`
+        INSERT INTO daily_quests (clerk_id, date, meal_logged)
+        VALUES (${clerkId}, ${mealDate}, true)
+        ON CONFLICT (clerk_id, date) 
+        DO UPDATE SET meal_logged = true, updated_at = NOW()
+      `;
+      
+      // Check if all quests are completed and update day_completed
+      const questStatus = await sql`
+        SELECT weight_logged, meal_logged, exercise_logged, day_completed
+        FROM daily_quests 
+        WHERE clerk_id = ${clerkId} AND date = ${mealDate}
+      `;
+      
+      if (questStatus.length > 0) {
+        const quest = questStatus[0];
+        const allCompleted = quest.weight_logged && quest.meal_logged && quest.exercise_logged;
+        
+        if (allCompleted && !quest.day_completed) {
+          await sql`
+            UPDATE daily_quests 
+            SET day_completed = true, updated_at = NOW()
+            WHERE clerk_id = ${clerkId} AND date = ${mealDate}
+          `;
+        }
+      }
+    } catch (questError) {
+      console.error('Failed to update daily quest:', questError);
+      // Don't fail the meal logging if quest update fails
+    }
+
     return NextResponse.json({ success: true, data: newMeal[0] });
   } catch (error) {
     return handleDatabaseError(error);

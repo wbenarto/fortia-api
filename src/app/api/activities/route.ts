@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
-import { getTodayDate } from '@/lib/dateUtils';
+import { getTodayDate, parseLocalDate, getDayBounds } from '@/lib/dateUtils';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -14,12 +14,50 @@ export async function POST(request: NextRequest) {
     // Use provided date or fallback to today's date
     const activityDate = date || getTodayDate();
 
-    // Insert the activity into the database
+    // Create a timezone-aware timestamp for the activity (like meals)
+    const localDate = parseLocalDate(activityDate);
+    localDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone edge cases
+    const activityTimestamp = localDate.toISOString();
+
+    // Insert the activity into the database with timezone-aware timestamp
     const result = await sql`
-			INSERT INTO activities (clerk_id, activity_description, estimated_calories, date)
-			VALUES (${clerkId}, ${activityDescription}, ${estimatedCalories || null}, ${activityDate})
+			INSERT INTO activities (clerk_id, activity_description, estimated_calories, date, created_at)
+			VALUES (${clerkId}, ${activityDescription}, ${estimatedCalories || null}, ${activityDate}, ${activityTimestamp})
 			RETURNING id, activity_description, estimated_calories, date, created_at
 		`;
+
+    // Update daily quest for exercise logging (always update when activity is logged)
+    try {
+      await sql`
+        INSERT INTO daily_quests (clerk_id, date, exercise_logged)
+        VALUES (${clerkId}, ${activityDate}, true)
+        ON CONFLICT (clerk_id, date) 
+        DO UPDATE SET exercise_logged = true, updated_at = NOW()
+      `;
+      
+      // Check if all quests are completed and update day_completed
+      const questStatus = await sql`
+        SELECT weight_logged, meal_logged, exercise_logged, day_completed
+        FROM daily_quests 
+        WHERE clerk_id = ${clerkId} AND date = ${activityDate}
+      `;
+      
+      if (questStatus.length > 0) {
+        const quest = questStatus[0];
+        const allCompleted = quest.weight_logged && quest.meal_logged && quest.exercise_logged;
+        
+        if (allCompleted && !quest.day_completed) {
+          await sql`
+            UPDATE daily_quests 
+            SET day_completed = true, updated_at = NOW()
+            WHERE clerk_id = ${clerkId} AND date = ${activityDate}
+          `;
+        }
+      }
+    } catch (questError) {
+      console.error('Failed to update daily quest:', questError);
+      // Don't fail the activity logging if quest update fails
+    }
 
     return NextResponse.json(
       {
@@ -45,6 +83,11 @@ export async function PUT(request: NextRequest) {
 
     // Use provided date or fallback to today's date
     const activityDate = date || getTodayDate();
+
+    // Create a timezone-aware timestamp for the activity (like meals)
+    const localDate = parseLocalDate(activityDate);
+    localDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone edge cases
+    const activityTimestamp = localDate.toISOString();
 
     // Update existing activity entry for today
     // This is specifically for updating daily entries like steps or BMR
@@ -74,7 +117,8 @@ export async function PUT(request: NextRequest) {
         UPDATE activities 
         SET 
           activity_description = ${activityDescription || 'Basal Metabolic Rate (BMR)'},
-          estimated_calories = ${estimatedCalories || null}
+          estimated_calories = ${estimatedCalories || null},
+          created_at = ${activityTimestamp}
         WHERE id = ${latestBMREntry[0].id}
         RETURNING id, activity_description, estimated_calories, date, created_at
       `;
@@ -101,7 +145,8 @@ export async function PUT(request: NextRequest) {
         UPDATE activities 
         SET 
           activity_description = ${activityDescription || 'Daily Steps'},
-          estimated_calories = ${estimatedCalories || null}
+          estimated_calories = ${estimatedCalories || null},
+          created_at = ${activityTimestamp}
         WHERE id = ${latestStepsEntry[0].id}
         RETURNING id, activity_description, estimated_calories, date, created_at
       `;
@@ -111,7 +156,8 @@ export async function PUT(request: NextRequest) {
         UPDATE activities 
         SET 
           activity_description = ${activityDescription || 'Daily Activity'},
-          estimated_calories = ${estimatedCalories || null}
+          estimated_calories = ${estimatedCalories || null},
+          created_at = ${activityTimestamp}
         WHERE 
           clerk_id = ${clerkId} 
           AND date = ${activityDate}
@@ -182,10 +228,15 @@ export async function GET(request: NextRequest) {
     }
 
     if (date) {
+      // Use timezone-aware date bounds for accurate retrieval (like meals)
+      const { start, end } = getDayBounds(date);
+      
       const response = await sql`
 				SELECT id, activity_description, estimated_calories, date, created_at
 				FROM activities
-				WHERE clerk_id = ${clerkId} AND date = ${date}
+				WHERE clerk_id = ${clerkId} 
+				AND created_at >= ${start.toISOString()}
+				AND created_at < ${end.toISOString()}
 				ORDER BY created_at DESC
 			`;
       return NextResponse.json({ success: true, data: response });
