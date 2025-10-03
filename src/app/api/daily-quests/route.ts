@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
-import { getTodayDate, getDayBounds } from '@/lib/dateUtils';
+import { getTodayDate } from '@/lib/dateUtils';
 import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
 
 const sql = neon(process.env.DATABASE_URL!);
