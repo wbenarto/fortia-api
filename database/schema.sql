@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS meals (
   meal_type TEXT CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
   notes TEXT,
   image_url TEXT,
+  ingredients JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -245,4 +246,4 @@ CREATE INDEX IF NOT EXISTS idx_deep_focus_created_at ON deep_focus_sessions(crea
 CREATE INDEX IF NOT EXISTS idx_daily_quests_clerk_id ON daily_quests(clerk_id);
 CREATE INDEX IF NOT EXISTS idx_daily_quests_date ON daily_quests(date);
 CREATE INDEX IF NOT EXISTS idx_daily_quests_clerk_date ON daily_quests(clerk_id, date);
-CREATE INDEX IF NOT EXISTS idx_daily_quests_created_at ON daily_quests(created_at); 
+CREATE INDEX IF NOT EXISTS idx_daily_quests_created_at ON daily_quests(created_at);

@@ -1,6 +1,6 @@
+import { getDayBounds, getTodayDate } from '@/lib/dateUtils';
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
-import { getDayBounds } from '@/lib/dateUtils';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -48,7 +48,10 @@ export async function POST(request: NextRequest) {
     const { type, title, selectedDate, exercises, clerkId, duration } = body;
 
     if (!clerkId) {
-      return NextResponse.json({ error: 'Clerk ID is required' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Clerk ID is required' },
+        { status: 401 }
+      );
     }
 
     // Validate required fields
@@ -84,6 +87,43 @@ export async function POST(request: NextRequest) {
 
     const sessionId = workoutSession.id;
 
+    // Check if workout is scheduled for today and update daily quest
+    const today = getTodayDate();
+    if (selectedDate === today) {
+      try {
+        await sql`
+          INSERT INTO daily_quests (clerk_id, date, exercise_logged)
+          VALUES (${clerkId}, ${selectedDate}, true)
+          ON CONFLICT (clerk_id, date)
+          DO UPDATE SET exercise_logged = true, updated_at = NOW()
+        `;
+
+        // Check if all quests are completed and update day_completed
+        const questStatus = await sql`
+          SELECT weight_logged, meal_logged, exercise_logged, day_completed
+          FROM daily_quests
+          WHERE clerk_id = ${clerkId} AND date = ${selectedDate}
+        `;
+
+        if (questStatus.length > 0) {
+          const quest = questStatus[0];
+          const allCompleted =
+            quest.weight_logged && quest.meal_logged && quest.exercise_logged;
+
+          if (allCompleted && !quest.day_completed) {
+            await sql`
+              UPDATE daily_quests
+              SET day_completed = true, updated_at = NOW()
+              WHERE clerk_id = ${clerkId} AND date = ${selectedDate}
+            `;
+          }
+        }
+      } catch (questError) {
+        console.error('Failed to update daily quest:', questError);
+        // Don't fail the workout creation if quest update fails
+      }
+    }
+
     // Handle exercises based on type
     if (type === 'exercise') {
       // For single exercise, create one workout_exercise entry
@@ -97,22 +137,22 @@ export async function POST(request: NextRequest) {
         const exercise = exercises[i];
         await sql`
 					INSERT INTO workout_exercises (
-						workout_session_id, 
-						exercise_name, 
-						sets, 
-						reps, 
-						weight, 
-						duration, 
+						workout_session_id,
+						exercise_name,
+						sets,
+						reps,
+						weight,
+						duration,
 						order_index,
 						calories_burned
 					)
 					VALUES (
-						${sessionId}, 
-						${exercise.name}, 
-						${parseInt(exercise.sets)}, 
-						${parseInt(exercise.reps)}, 
-						${parseFloat(exercise.weight)}, 
-						${exercise.duration}, 
+						${sessionId},
+						${exercise.name},
+						${parseInt(exercise.sets)},
+						${parseInt(exercise.reps)},
+						${parseFloat(exercise.weight)},
+						${exercise.duration},
 						${i + 1},
 						${exercise.calories_burned || null}
 					)
@@ -127,7 +167,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error saving workout:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
@@ -138,7 +181,10 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
 
     if (!clerkId) {
-      return NextResponse.json({ error: 'Clerk ID is required' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Clerk ID is required' },
+        { status: 401 }
+      );
     }
 
     let workouts;
@@ -148,7 +194,7 @@ export async function GET(request: NextRequest) {
       const { start, end } = getDayBounds(date);
 
       workouts = await sql`
-				SELECT 
+				SELECT
 					ws.id as session_id,
 					ws.title,
 					ws.workout_type,
@@ -166,14 +212,14 @@ export async function GET(request: NextRequest) {
 					we.calories_burned
 				FROM workout_sessions ws
 				LEFT JOIN workout_exercises we ON ws.id = we.workout_session_id
-				WHERE ws.clerk_id = ${clerkId} 
+				WHERE ws.clerk_id = ${clerkId}
 				AND ws.created_at >= ${start.toISOString()}
 				AND ws.created_at < ${end.toISOString()}
 				ORDER BY ws.scheduled_date DESC, we.order_index ASC
 			`;
     } else {
       workouts = await sql`
-				SELECT 
+				SELECT
 					ws.id as session_id,
 					ws.title,
 					ws.workout_type,
@@ -197,37 +243,40 @@ export async function GET(request: NextRequest) {
     }
 
     // Group exercises by session
-    const groupedWorkouts = (workouts as WorkoutRow[]).reduce((acc: Record<string, GroupedWorkout>, row: WorkoutRow) => {
-      const sessionId = row.session_id;
+    const groupedWorkouts = (workouts as WorkoutRow[]).reduce(
+      (acc: Record<string, GroupedWorkout>, row: WorkoutRow) => {
+        const sessionId = row.session_id;
 
-      if (!acc[sessionId]) {
-        acc[sessionId] = {
-          id: sessionId,
-          title: row.title,
-          workout_type: row.workout_type,
-          scheduled_date: row.scheduled_date,
-          created_at: row.created_at,
-          exercises: [],
-        };
-      }
+        if (!acc[sessionId]) {
+          acc[sessionId] = {
+            id: sessionId,
+            title: row.title,
+            workout_type: row.workout_type,
+            scheduled_date: row.scheduled_date,
+            created_at: row.created_at,
+            exercises: [],
+          };
+        }
 
-      if (row.exercise_id && row.exercise_name) {
-        acc[sessionId].exercises.push({
-          id: row.exercise_id,
-          name: row.exercise_name,
-          sets: row.sets,
-          reps: row.reps,
-          weight: row.weight,
-          duration: row.duration,
-          order_index: row.order_index,
-          is_completed: row.is_completed,
-          completed_at: row.completed_at,
-          calories_burned: row.calories_burned,
-        });
-      }
+        if (row.exercise_id && row.exercise_name) {
+          acc[sessionId].exercises.push({
+            id: row.exercise_id,
+            name: row.exercise_name,
+            sets: row.sets,
+            reps: row.reps,
+            weight: row.weight,
+            duration: row.duration,
+            order_index: row.order_index,
+            is_completed: row.is_completed,
+            completed_at: row.completed_at,
+            calories_burned: row.calories_burned,
+          });
+        }
 
-      return acc;
-    }, {} as Record<string, GroupedWorkout>);
+        return acc;
+      },
+      {} as Record<string, GroupedWorkout>
+    );
 
     return NextResponse.json({
       success: true,
@@ -235,7 +284,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error fetching workouts:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
@@ -246,64 +298,109 @@ export async function DELETE(request: NextRequest) {
     const sessionId = searchParams.get('sessionId');
     const exerciseId = searchParams.get('exerciseId');
 
-
-
     if (!clerkId) {
-      return NextResponse.json({ error: 'Clerk ID is required' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Clerk ID is required' },
+        { status: 401 }
+      );
     }
 
     if (!sessionId) {
-      return NextResponse.json({ error: 'Session ID is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Session ID is required' },
+        { status: 400 }
+      );
     }
 
     const parsedSessionId = parseInt(sessionId);
     if (isNaN(parsedSessionId)) {
-      return NextResponse.json({ error: 'Invalid session ID format' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Invalid session ID format' },
+        { status: 400 }
+      );
     }
 
     // If exerciseId is provided, delete individual exercise
     if (exerciseId) {
       const parsedExerciseId = parseInt(exerciseId);
       if (isNaN(parsedExerciseId)) {
-        return NextResponse.json({ error: 'Invalid exercise ID format' }, { status: 400 });
+        return NextResponse.json(
+          { error: 'Invalid exercise ID format' },
+          { status: 400 }
+        );
       }
-
-
 
       // Verify the exercise belongs to a session owned by the user
       const exerciseCheck = await sql`
-				SELECT we.id, we.exercise_name, ws.clerk_id 
+				SELECT we.id, we.exercise_name, ws.clerk_id
 				FROM workout_exercises we
 				JOIN workout_sessions ws ON we.workout_session_id = ws.id
 				WHERE we.id = ${parsedExerciseId} AND ws.clerk_id = ${clerkId}
 			`;
 
-
-
       if (exerciseCheck.length === 0) {
-        return NextResponse.json({ error: 'Exercise not found or access denied' }, { status: 404 });
+        return NextResponse.json(
+          { error: 'Exercise not found or access denied' },
+          { status: 404 }
+        );
       }
 
       // Delete the individual exercise
       await sql`
-				DELETE FROM workout_exercises 
+				DELETE FROM workout_exercises
 				WHERE id = ${parsedExerciseId}
 			`;
-
 
       // Check if this was the last exercise in the session
       const remainingExercises = await sql`
 				SELECT COUNT(*) as count
-				FROM workout_exercises 
+				FROM workout_exercises
 				WHERE workout_session_id = ${parsedSessionId}
 			`;
 
       if (remainingExercises[0].count === 0) {
+        // Get the session date before deleting to check if we need to update daily quest
+        const sessionInfo = await sql`
+          SELECT scheduled_date FROM workout_sessions
+          WHERE id = ${parsedSessionId} AND clerk_id = ${clerkId}
+        `;
+
         // If no exercises left, delete the session too
         await sql`
-					DELETE FROM workout_sessions 
+					DELETE FROM workout_sessions
 					WHERE id = ${parsedSessionId} AND clerk_id = ${clerkId}
 				`;
+
+        // Check if we need to update daily quest when deleting workout scheduled for today
+        if (sessionInfo.length > 0) {
+          const sessionDate = sessionInfo[0].scheduled_date;
+          const today = getTodayDate();
+
+          if (sessionDate === today) {
+            try {
+              // Check if there are any other workouts scheduled for today
+              const otherWorkoutsToday = await sql`
+                SELECT COUNT(*) as count FROM workout_sessions
+                WHERE clerk_id = ${clerkId} AND scheduled_date = ${today}
+              `;
+
+              // If no other workouts scheduled for today, we might need to update the daily quest
+              if (otherWorkoutsToday[0].count === 0) {
+                // Check if exercise_logged was only set by this workout
+                // We'll leave it as is for now since the user might have other exercise activities
+                // This is a conservative approach - we don't want to remove quest completion
+                // if the user has other legitimate exercise activities
+              }
+            } catch (questError) {
+              console.error(
+                'Failed to check daily quest after workout deletion:',
+                questError
+              );
+              // Don't fail the deletion if quest check fails
+            }
+          }
+        }
+
         return NextResponse.json({
           success: true,
           message: 'Exercise and session deleted successfully',
@@ -318,14 +415,11 @@ export async function DELETE(request: NextRequest) {
 
     // If no exerciseId, delete entire session (existing behavior)
 
-
-    // First verify the session belongs to the user
+    // First verify the session belongs to the user and get the scheduled date
     const sessionCheck = await sql`
-			SELECT id FROM workout_sessions 
+			SELECT id, scheduled_date FROM workout_sessions
 			WHERE id = ${parsedSessionId} AND clerk_id = ${clerkId}
 		`;
-
-
 
     if (sessionCheck.length === 0) {
       return NextResponse.json(
@@ -334,14 +428,39 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-
+    const sessionDate = sessionCheck[0].scheduled_date;
 
     // Delete the workout session (this will cascade delete all exercises due to ON DELETE CASCADE)
     await sql`
-			DELETE FROM workout_sessions 
+			DELETE FROM workout_sessions
 			WHERE id = ${parsedSessionId} AND clerk_id = ${clerkId}
 		`;
 
+    // Check if we need to update daily quest when deleting workout scheduled for today
+    const today = getTodayDate();
+    if (sessionDate === today) {
+      try {
+        // Check if there are any other workouts scheduled for today
+        const otherWorkoutsToday = await sql`
+          SELECT COUNT(*) as count FROM workout_sessions
+          WHERE clerk_id = ${clerkId} AND scheduled_date = ${today}
+        `;
+
+        // If no other workouts scheduled for today, we might need to update the daily quest
+        if (otherWorkoutsToday[0].count === 0) {
+          // Check if exercise_logged was only set by this workout
+          // We'll leave it as is for now since the user might have other exercise activities
+          // This is a conservative approach - we don't want to remove quest completion
+          // if the user has other legitimate exercise activities
+        }
+      } catch (questError) {
+        console.error(
+          'Failed to check daily quest after workout deletion:',
+          questError
+        );
+        // Don't fail the deletion if quest check fails
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -349,6 +468,9 @@ export async function DELETE(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error deleting workout session:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

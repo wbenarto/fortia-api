@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS meals (
   confidence_score DECIMAL(3,2),
   meal_type TEXT CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
   notes TEXT,
+  image_url TEXT,
+  ingredients JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -230,64 +232,64 @@ CREATE INDEX IF NOT EXISTS idx_deep_focus_created_at ON deep_focus_sessions(crea
 `;
 
 async function setupDatabase() {
-	try {
-		  console.log('Setting up database schema...\n');
+  try {
+    console.log('Setting up database schema...\n');
 
-		// Split schema into individual statements
-		const schemaStatements = schema
-			.split(';')
-			.map(stmt => stmt.trim())
-			.filter(stmt => stmt.length > 0);
+    // Split schema into individual statements
+    const schemaStatements = schema
+      .split(';')
+      .map(stmt => stmt.trim())
+      .filter(stmt => stmt.length > 0);
 
-		// Execute schema statements
-		for (const statement of schemaStatements) {
-			if (statement.trim()) {
-				console.log(`Executing: ${statement.substring(0, 50)}...`);
-				await sql.unsafe(statement);
-			}
-		}
+    // Execute schema statements
+    for (const statement of schemaStatements) {
+      if (statement.trim()) {
+        console.log(`Executing: ${statement.substring(0, 50)}...`);
+        await sql.unsafe(statement);
+      }
+    }
 
-		console.log('\nSchema created successfully!\n');
+    console.log('\nSchema created successfully!\n');
 
-		// Split indexes into individual statements
-		const indexStatements = indexes
-			.split(';')
-			.map(stmt => stmt.trim())
-			.filter(stmt => stmt.length > 0);
+    // Split indexes into individual statements
+    const indexStatements = indexes
+      .split(';')
+      .map(stmt => stmt.trim())
+      .filter(stmt => stmt.length > 0);
 
-		// Execute index statements
-		console.log('Creating indexes...\n');
-		for (const statement of indexStatements) {
-			if (statement.trim()) {
-				console.log(`Executing: ${statement.substring(0, 50)}...`);
-				await sql.unsafe(statement);
-			}
-		}
+    // Execute index statements
+    console.log('Creating indexes...\n');
+    for (const statement of indexStatements) {
+      if (statement.trim()) {
+        console.log(`Executing: ${statement.substring(0, 50)}...`);
+        await sql.unsafe(statement);
+      }
+    }
 
-			console.log('\nAll indexes created successfully!');
-	console.log('\nDatabase setup completed successfully!');
-	console.log('\nDatabase tables created:');
-	console.log('  - users');
-	console.log('  - meals');
-	console.log('  - weights');
-	console.log('  - steps');
-	console.log('  - activities');
-	console.log('  - api_logs');
-	console.log('  - privacy_consent');
-	console.log('  - data_consent');
-	console.log('  - workout_sessions');
-	console.log('  - workout_exercises');
-	console.log('  - deep_focus_sessions');
-	console.log('  - migrations');
-	} catch (error) {
-		console.error('Database setup failed:', error);
-		process.exit(1);
-	}
+    console.log('\nAll indexes created successfully!');
+    console.log('\nDatabase setup completed successfully!');
+    console.log('\nDatabase tables created:');
+    console.log('  - users');
+    console.log('  - meals');
+    console.log('  - weights');
+    console.log('  - steps');
+    console.log('  - activities');
+    console.log('  - api_logs');
+    console.log('  - privacy_consent');
+    console.log('  - data_consent');
+    console.log('  - workout_sessions');
+    console.log('  - workout_exercises');
+    console.log('  - deep_focus_sessions');
+    console.log('  - migrations');
+  } catch (error) {
+    console.error('Database setup failed:', error);
+    process.exit(1);
+  }
 }
 
 // Run setup if this file is executed directly
 if (require.main === module) {
-	setupDatabase();
+  setupDatabase();
 }
 
-module.exports = { setupDatabase }; 
+module.exports = { setupDatabase };

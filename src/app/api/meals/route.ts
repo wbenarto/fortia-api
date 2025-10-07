@@ -1,7 +1,7 @@
+import { getDayBounds, getTodayDate, parseLocalDate } from '@/lib/dateUtils';
+import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
-import { getTodayDate, getDayBounds, parseLocalDate } from '@/lib/dateUtils';
-import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     if (summary === 'true') {
       // Get daily nutrition summary using timezone-aware date range
       const summaryData = await sql`
-        SELECT 
+        SELECT
           COALESCE(SUM(calories), 0) as total_calories,
           COALESCE(SUM(protein), 0) as total_protein,
           COALESCE(SUM(carbs), 0) as total_carbs,
@@ -32,8 +32,8 @@ export async function GET(request: NextRequest) {
           COALESCE(SUM(sugar), 0) as total_sugar,
           COALESCE(SUM(sodium), 0) as total_sodium,
           COUNT(*) as meal_count
-        FROM meals 
-        WHERE clerk_id = ${clerkId} 
+        FROM meals
+        WHERE clerk_id = ${clerkId}
         AND created_at >= ${start.toISOString()}
         AND created_at < ${end.toISOString()}
       `;
@@ -55,8 +55,8 @@ export async function GET(request: NextRequest) {
 
     // Get individual meals for the date using timezone-aware date range
     const meals = await sql`
-      SELECT * FROM meals 
-      WHERE clerk_id = ${clerkId} 
+      SELECT * FROM meals
+      WHERE clerk_id = ${clerkId}
       AND created_at >= ${start.toISOString()}
       AND created_at < ${end.toISOString()}
       ORDER BY created_at DESC
@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
       notes,
       imageUrl, // Cloudinary URL for meal photo
       date, // User's local date (YYYY-MM-DD format)
+      ingredients, // Array of ingredients for recipe-based meals
     } = await request.json();
 
     if (!clerkId) {
@@ -102,7 +103,6 @@ export async function POST(request: NextRequest) {
     localDate.setHours(12, 0, 0, 0); // Set to noon in user's local timezone
     const mealTimestamp = localDate.toISOString();
 
-
     // Validate and convert numeric fields
     const validatedData = {
       calories: Math.round(Number(calories) || 0),
@@ -115,6 +115,20 @@ export async function POST(request: NextRequest) {
       confidenceScore: Number(confidenceScore) || 0,
     };
 
+    // Validate ingredients format
+    let validatedIngredients = [];
+    if (ingredients && Array.isArray(ingredients)) {
+      validatedIngredients = ingredients.filter(
+        ingredient =>
+          Array.isArray(ingredient) &&
+          ingredient.length === 2 &&
+          typeof ingredient[0] === 'string' &&
+          typeof ingredient[1] === 'string' &&
+          ingredient[0].trim() !== '' &&
+          ingredient[1].trim() !== ''
+      );
+    }
+
     // Validate numeric ranges
     if (
       isNaN(validatedData.calories) ||
@@ -123,22 +137,46 @@ export async function POST(request: NextRequest) {
     ) {
       return ErrorResponses.badRequest('Invalid calories value');
     }
-    if (isNaN(validatedData.protein) || validatedData.protein < 0 || validatedData.protein > 1000) {
+    if (
+      isNaN(validatedData.protein) ||
+      validatedData.protein < 0 ||
+      validatedData.protein > 1000
+    ) {
       return ErrorResponses.badRequest('Invalid protein value');
     }
-    if (isNaN(validatedData.carbs) || validatedData.carbs < 0 || validatedData.carbs > 1000) {
+    if (
+      isNaN(validatedData.carbs) ||
+      validatedData.carbs < 0 ||
+      validatedData.carbs > 1000
+    ) {
       return ErrorResponses.badRequest('Invalid carbs value');
     }
-    if (isNaN(validatedData.fats) || validatedData.fats < 0 || validatedData.fats > 1000) {
+    if (
+      isNaN(validatedData.fats) ||
+      validatedData.fats < 0 ||
+      validatedData.fats > 1000
+    ) {
       return ErrorResponses.badRequest('Invalid fats value');
     }
-    if (isNaN(validatedData.fiber) || validatedData.fiber < 0 || validatedData.fiber > 100) {
+    if (
+      isNaN(validatedData.fiber) ||
+      validatedData.fiber < 0 ||
+      validatedData.fiber > 100
+    ) {
       return ErrorResponses.badRequest('Invalid fiber value');
     }
-    if (isNaN(validatedData.sugar) || validatedData.sugar < 0 || validatedData.sugar > 1000) {
+    if (
+      isNaN(validatedData.sugar) ||
+      validatedData.sugar < 0 ||
+      validatedData.sugar > 1000
+    ) {
       return ErrorResponses.badRequest('Invalid sugar value');
     }
-    if (isNaN(validatedData.sodium) || validatedData.sodium < 0 || validatedData.sodium > 10000) {
+    if (
+      isNaN(validatedData.sodium) ||
+      validatedData.sodium < 0 ||
+      validatedData.sodium > 10000
+    ) {
       return ErrorResponses.badRequest('Invalid sodium value');
     }
     if (
@@ -151,13 +189,13 @@ export async function POST(request: NextRequest) {
 
     const newMeal = await sql`
 			INSERT INTO meals (
-				clerk_id, food_name, portion_size, calories, protein, carbs, fats, 
-				fiber, sugar, sodium, confidence_score, meal_type, notes, image_url, created_at, updated_at
+				clerk_id, food_name, portion_size, calories, protein, carbs, fats,
+				fiber, sugar, sodium, confidence_score, meal_type, notes, image_url, ingredients, created_at, updated_at
 			) VALUES (
-				${clerkId}, ${foodName}, ${portionSize}, ${validatedData.calories}, 
+				${clerkId}, ${foodName}, ${portionSize}, ${validatedData.calories},
 				${validatedData.protein}, ${validatedData.carbs}, ${validatedData.fats},
-				${validatedData.fiber}, ${validatedData.sugar}, ${validatedData.sodium}, 
-				${validatedData.confidenceScore}, ${mealType}, ${notes}, ${imageUrl}, ${mealTimestamp}, ${mealTimestamp}
+				${validatedData.fiber}, ${validatedData.sugar}, ${validatedData.sodium},
+				${validatedData.confidenceScore}, ${mealType}, ${notes}, ${imageUrl}, ${JSON.stringify(validatedIngredients)}, ${mealTimestamp}, ${mealTimestamp}
 			)
 			RETURNING *
 		`;
@@ -167,24 +205,25 @@ export async function POST(request: NextRequest) {
       await sql`
         INSERT INTO daily_quests (clerk_id, date, meal_logged)
         VALUES (${clerkId}, ${mealDate}, true)
-        ON CONFLICT (clerk_id, date) 
+        ON CONFLICT (clerk_id, date)
         DO UPDATE SET meal_logged = true, updated_at = NOW()
       `;
-      
+
       // Check if all quests are completed and update day_completed
       const questStatus = await sql`
         SELECT weight_logged, meal_logged, exercise_logged, day_completed
-        FROM daily_quests 
+        FROM daily_quests
         WHERE clerk_id = ${clerkId} AND date = ${mealDate}
       `;
-      
+
       if (questStatus.length > 0) {
         const quest = questStatus[0];
-        const allCompleted = quest.weight_logged && quest.meal_logged && quest.exercise_logged;
-        
+        const allCompleted =
+          quest.weight_logged && quest.meal_logged && quest.exercise_logged;
+
         if (allCompleted && !quest.day_completed) {
           await sql`
-            UPDATE daily_quests 
+            UPDATE daily_quests
             SET day_completed = true, updated_at = NOW()
             WHERE clerk_id = ${clerkId} AND date = ${mealDate}
           `;
@@ -308,14 +347,14 @@ export async function PATCH(request: NextRequest) {
     // Get user info
     const userInfo = await sql`
       SELECT id, first_name, last_name, email, clerk_id, created_at
-      FROM users 
+      FROM users
       WHERE clerk_id = ${clerkId}
     `;
 
     // Get all meals for debugging
     const allMeals = await sql`
       SELECT id, food_name, created_at, DATE(created_at) as date_only
-      FROM meals 
+      FROM meals
       WHERE clerk_id = ${clerkId}
       ORDER BY created_at DESC
       LIMIT 10

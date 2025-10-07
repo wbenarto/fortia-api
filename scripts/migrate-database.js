@@ -5,60 +5,63 @@ const sql = neon(process.env.DATABASE_URL);
 
 // Migration functions
 const migrations = [
-	{
-		id: '001_fix_consent_tables',
-		description: 'Fix privacy_consent and data_consent tables to match Fortia schema',
-		up: async () => {
-			console.log('Running migration: Fix consent tables to match Fortia schema...');
+  {
+    id: '001_fix_consent_tables',
+    description:
+      'Fix privacy_consent and data_consent tables to match Fortia schema',
+    up: async () => {
+      console.log(
+        'Running migration: Fix consent tables to match Fortia schema...'
+      );
 
-			// Fix privacy_consent table
-			console.log('Fixing privacy_consent table...');
-			
-			// Check if we need to rename columns
-			const hasPrivacyPolicyAccepted = await sql`
+      // Fix privacy_consent table
+      console.log('Fixing privacy_consent table...');
+
+      // Check if we need to rename columns
+      const hasPrivacyPolicyAccepted = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.columns 
-					WHERE table_name = 'privacy_consent' 
+					SELECT FROM information_schema.columns
+					WHERE table_name = 'privacy_consent'
 					AND column_name = 'privacy_policy_accepted'
 				)
 			`;
 
-			if (hasPrivacyPolicyAccepted[0].exists) {
-				// Rename privacy_policy_accepted to consent_given
-				await sql`ALTER TABLE privacy_consent RENAME COLUMN privacy_policy_accepted TO consent_given`;
-				console.log('Renamed privacy_policy_accepted to consent_given');
-			}
+      if (hasPrivacyPolicyAccepted[0].exists) {
+        // Rename privacy_policy_accepted to consent_given
+        await sql`ALTER TABLE privacy_consent RENAME COLUMN privacy_policy_accepted TO consent_given`;
+        console.log('Renamed privacy_policy_accepted to consent_given');
+      }
 
-			// Remove terms_accepted column if it exists
-			const hasTermsAccepted = await sql`
+      // Remove terms_accepted column if it exists
+      const hasTermsAccepted = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.columns 
-					WHERE table_name = 'privacy_consent' 
+					SELECT FROM information_schema.columns
+					WHERE table_name = 'privacy_consent'
 					AND column_name = 'terms_accepted'
 				)
 			`;
 
-			if (hasTermsAccepted[0].exists) {
-				await sql`ALTER TABLE privacy_consent DROP COLUMN terms_accepted`;
-				console.log('Removed terms_accepted column');
-			}
+      if (hasTermsAccepted[0].exists) {
+        await sql`ALTER TABLE privacy_consent DROP COLUMN terms_accepted`;
+        console.log('Removed terms_accepted column');
+      }
 
-			// Fix data types for consent_version and consent_method
-			await sql`ALTER TABLE privacy_consent ALTER COLUMN consent_version TYPE TEXT`;
-			await sql`ALTER TABLE privacy_consent ALTER COLUMN consent_method TYPE TEXT`;
-			console.log('Fixed data types for consent_version and consent_method');
+      // Fix data types for consent_version and consent_method
+      await sql`ALTER TABLE privacy_consent ALTER COLUMN consent_version TYPE TEXT`;
+      await sql`ALTER TABLE privacy_consent ALTER COLUMN consent_method TYPE TEXT`;
+      console.log('Fixed data types for consent_version and consent_method');
 
-			// Fix ip_address type
-			await sql`ALTER TABLE privacy_consent ALTER COLUMN ip_address TYPE TEXT`;
-			console.log('Fixed ip_address type to TEXT');
+      // Fix ip_address type
+      await sql`ALTER TABLE privacy_consent ALTER COLUMN ip_address TYPE TEXT`;
+      console.log('Fixed ip_address type to TEXT');
 
-			// Fix data_consent table
-			console.log('Fixing data_consent table...');
-			
-			// Drop the old data_consent table and recreate it
-			await sql`DROP TABLE IF EXISTS data_consent CASCADE`;
-			
-			await sql`
+      // Fix data_consent table
+      console.log('Fixing data_consent table...');
+
+      // Drop the old data_consent table and recreate it
+      await sql`DROP TABLE IF EXISTS data_consent CASCADE`;
+
+      await sql`
 				CREATE TABLE data_consent (
 					id SERIAL PRIMARY KEY,
 					clerk_id TEXT NOT NULL UNIQUE,
@@ -75,35 +78,35 @@ const migrations = [
 				)
 			`;
 
-			// Create indexes
-			await sql`CREATE INDEX idx_data_consent_clerk_id ON data_consent(clerk_id)`;
-			await sql`CREATE INDEX idx_data_consent_created_at ON data_consent(created_at)`;
+      // Create indexes
+      await sql`CREATE INDEX idx_data_consent_clerk_id ON data_consent(clerk_id)`;
+      await sql`CREATE INDEX idx_data_consent_created_at ON data_consent(created_at)`;
 
-			console.log('Recreated data_consent table with correct schema');
-		},
-	},
-	{
-		id: '002_create_data_consent_table',
-		description: 'Create data_consent table for simplified consent management',
-		up: async () => {
-			console.log('Running migration: Create data_consent table...');
+      console.log('Recreated data_consent table with correct schema');
+    },
+  },
+  {
+    id: '002_create_data_consent_table',
+    description: 'Create data_consent table for simplified consent management',
+    up: async () => {
+      console.log('Running migration: Create data_consent table...');
 
-			// Check if table already exists
-			const tableExists = await sql`
+      // Check if table already exists
+      const tableExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.tables 
-					WHERE table_schema = 'public' 
+					SELECT FROM information_schema.tables
+					WHERE table_schema = 'public'
 					AND table_name = 'data_consent'
 				)
 			`;
 
-			if (tableExists[0].exists) {
-				console.log('data_consent table already exists, skipping...');
-				return;
-			}
+      if (tableExists[0].exists) {
+        console.log('data_consent table already exists, skipping...');
+        return;
+      }
 
-			// Create simplified data_consent table
-			await sql`
+      // Create simplified data_consent table
+      await sql`
 				CREATE TABLE data_consent (
 					id SERIAL PRIMARY KEY,
 					clerk_id VARCHAR(255) UNIQUE NOT NULL,
@@ -117,216 +120,240 @@ const migrations = [
 				)
 			`;
 
-			// Create indexes
-			await sql`CREATE INDEX idx_data_consent_clerk_id ON data_consent(clerk_id)`;
-			await sql`CREATE INDEX idx_data_consent_created_at ON data_consent(created_at)`;
+      // Create indexes
+      await sql`CREATE INDEX idx_data_consent_clerk_id ON data_consent(clerk_id)`;
+      await sql`CREATE INDEX idx_data_consent_created_at ON data_consent(created_at)`;
 
-			console.log('data_consent table created successfully');
-		},
-	},
+      console.log('data_consent table created successfully');
+    },
+  },
 
-	{
-		id: '003_update_privacy_consent_table',
-		description: 'Update privacy_consent table to use INET for ip_address',
-		up: async () => {
-			console.log('Running migration: Update privacy_consent table...');
+  {
+    id: '003_update_privacy_consent_table',
+    description: 'Update privacy_consent table to use INET for ip_address',
+    up: async () => {
+      console.log('Running migration: Update privacy_consent table...');
 
-			// Check if ip_address column exists and its type
-			const columnInfo = await sql`
-        SELECT data_type 
-        FROM information_schema.columns 
-        WHERE table_name = 'privacy_consent' 
+      // Check if ip_address column exists and its type
+      const columnInfo = await sql`
+        SELECT data_type
+        FROM information_schema.columns
+        WHERE table_name = 'privacy_consent'
         AND column_name = 'ip_address'
       `;
 
-			if (columnInfo.length === 0) {
-				console.log("ip_address column doesn't exist, skipping...");
-				return;
-			}
+      if (columnInfo.length === 0) {
+        console.log("ip_address column doesn't exist, skipping...");
+        return;
+      }
 
-			if (columnInfo[0].data_type === 'inet') {
-				console.log('ip_address column already has correct type, skipping...');
-				return;
-			}
+      if (columnInfo[0].data_type === 'inet') {
+        console.log('ip_address column already has correct type, skipping...');
+        return;
+      }
 
-			// Convert TEXT to INET
-			await sql`ALTER TABLE privacy_consent ALTER COLUMN ip_address TYPE INET USING ip_address::INET`;
-			console.log('privacy_consent.ip_address column updated to INET type');
-		},
-	},
+      // Convert TEXT to INET
+      await sql`ALTER TABLE privacy_consent ALTER COLUMN ip_address TYPE INET USING ip_address::INET`;
+      console.log('privacy_consent.ip_address column updated to INET type');
+    },
+  },
 
-	{
-		id: '004_add_missing_indexes',
-		description: 'Add missing indexes for better performance',
-		up: async () => {
-			console.log('Running migration: Add missing indexes...');
+  {
+    id: '004_add_missing_indexes',
+    description: 'Add missing indexes for better performance',
+    up: async () => {
+      console.log('Running migration: Add missing indexes...');
 
-			// Check and create indexes for users table
-			const userIndexes = [
-				{ name: 'idx_users_clerk_id', table: 'users', column: 'clerk_id' },
-				{ name: 'idx_users_email', table: 'users', column: 'email' },
-				{ name: 'idx_users_created_at', table: 'users', column: 'created_at' }
-			];
+      // Check and create indexes for users table
+      const userIndexes = [
+        { name: 'idx_users_clerk_id', table: 'users', column: 'clerk_id' },
+        { name: 'idx_users_email', table: 'users', column: 'email' },
+        { name: 'idx_users_created_at', table: 'users', column: 'created_at' },
+      ];
 
-			for (const index of userIndexes) {
-				const indexExists = await sql`
+      for (const index of userIndexes) {
+        const indexExists = await sql`
 					SELECT EXISTS (
-						SELECT FROM pg_indexes 
+						SELECT FROM pg_indexes
 						WHERE indexname = ${index.name}
 					)
 				`;
 
-				if (!indexExists[0].exists) {
-					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`Created index: ${index.name}`);
-				} else {
-					console.log(`Index ${index.name} already exists, skipping...`);
-				}
-			}
+        if (!indexExists[0].exists) {
+          await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+          console.log(`Created index: ${index.name}`);
+        } else {
+          console.log(`Index ${index.name} already exists, skipping...`);
+        }
+      }
 
-			// Check and create indexes for meals table
-			const mealIndexes = [
-				{ name: 'idx_meals_clerk_id', table: 'meals', column: 'clerk_id' },
-				{ name: 'idx_meals_created_at', table: 'meals', column: 'created_at' },
-				{ name: 'idx_meals_meal_type', table: 'meals', column: 'meal_type' }
-			];
+      // Check and create indexes for meals table
+      const mealIndexes = [
+        { name: 'idx_meals_clerk_id', table: 'meals', column: 'clerk_id' },
+        { name: 'idx_meals_created_at', table: 'meals', column: 'created_at' },
+        { name: 'idx_meals_meal_type', table: 'meals', column: 'meal_type' },
+      ];
 
-			for (const index of mealIndexes) {
-				const indexExists = await sql`
+      for (const index of mealIndexes) {
+        const indexExists = await sql`
 					SELECT EXISTS (
-						SELECT FROM pg_indexes 
+						SELECT FROM pg_indexes
 						WHERE indexname = ${index.name}
 					)
 				`;
 
-				if (!indexExists[0].exists) {
-					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`Created index: ${index.name}`);
-				} else {
-					console.log(`Index ${index.name} already exists, skipping...`);
-				}
-			}
+        if (!indexExists[0].exists) {
+          await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+          console.log(`Created index: ${index.name}`);
+        } else {
+          console.log(`Index ${index.name} already exists, skipping...`);
+        }
+      }
 
-			// Check and create indexes for weights table
-			const weightIndexes = [
-				{ name: 'idx_weights_clerk_id', table: 'weights', column: 'clerk_id' },
-				{ name: 'idx_weights_date', table: 'weights', column: 'date' },
-				{ name: 'idx_weights_clerk_date', table: 'weights', columns: ['clerk_id', 'date'] }
-			];
+      // Check and create indexes for weights table
+      const weightIndexes = [
+        { name: 'idx_weights_clerk_id', table: 'weights', column: 'clerk_id' },
+        { name: 'idx_weights_date', table: 'weights', column: 'date' },
+        {
+          name: 'idx_weights_clerk_date',
+          table: 'weights',
+          columns: ['clerk_id', 'date'],
+        },
+      ];
 
-			for (const index of weightIndexes) {
-				const indexExists = await sql`
+      for (const index of weightIndexes) {
+        const indexExists = await sql`
 					SELECT EXISTS (
-						SELECT FROM pg_indexes 
+						SELECT FROM pg_indexes
 						WHERE indexname = ${index.name}
 					)
 				`;
 
-				if (!indexExists[0].exists) {
-					if (index.columns) {
-						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.columns.join(', '))})`;
-					} else {
-						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					}
-					console.log(`Created index: ${index.name}`);
-				} else {
-					console.log(`Index ${index.name} already exists, skipping...`);
-				}
-			}
+        if (!indexExists[0].exists) {
+          if (index.columns) {
+            await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.columns.join(', '))})`;
+          } else {
+            await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+          }
+          console.log(`Created index: ${index.name}`);
+        } else {
+          console.log(`Index ${index.name} already exists, skipping...`);
+        }
+      }
 
-			// Check and create indexes for steps table
-			const stepIndexes = [
-				{ name: 'idx_steps_clerk_id', table: 'steps', column: 'clerk_id' },
-				{ name: 'idx_steps_date', table: 'steps', column: 'date' },
-				{ name: 'idx_steps_clerk_date', table: 'steps', columns: ['clerk_id', 'date'] }
-			];
+      // Check and create indexes for steps table
+      const stepIndexes = [
+        { name: 'idx_steps_clerk_id', table: 'steps', column: 'clerk_id' },
+        { name: 'idx_steps_date', table: 'steps', column: 'date' },
+        {
+          name: 'idx_steps_clerk_date',
+          table: 'steps',
+          columns: ['clerk_id', 'date'],
+        },
+      ];
 
-			for (const index of stepIndexes) {
-				const indexExists = await sql`
+      for (const index of stepIndexes) {
+        const indexExists = await sql`
 					SELECT EXISTS (
-						SELECT FROM pg_indexes 
+						SELECT FROM pg_indexes
 						WHERE indexname = ${index.name}
 					)
 				`;
 
-				if (!indexExists[0].exists) {
-					if (index.columns) {
-						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.columns.join(', '))})`;
-					} else {
-						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					}
-					console.log(`Created index: ${index.name}`);
-				} else {
-					console.log(`Index ${index.name} already exists, skipping...`);
-				}
-			}
+        if (!indexExists[0].exists) {
+          if (index.columns) {
+            await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.columns.join(', '))})`;
+          } else {
+            await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+          }
+          console.log(`Created index: ${index.name}`);
+        } else {
+          console.log(`Index ${index.name} already exists, skipping...`);
+        }
+      }
 
-			// Check and create indexes for activities table
-			const activityIndexes = [
-				{ name: 'idx_activities_clerk_id', table: 'activities', column: 'clerk_id' },
-				{ name: 'idx_activities_date', table: 'activities', column: 'date' },
-				{ name: 'idx_activities_created_at', table: 'activities', column: 'created_at' }
-			];
+      // Check and create indexes for activities table
+      const activityIndexes = [
+        {
+          name: 'idx_activities_clerk_id',
+          table: 'activities',
+          column: 'clerk_id',
+        },
+        { name: 'idx_activities_date', table: 'activities', column: 'date' },
+        {
+          name: 'idx_activities_created_at',
+          table: 'activities',
+          column: 'created_at',
+        },
+      ];
 
-			for (const index of activityIndexes) {
-				const indexExists = await sql`
+      for (const index of activityIndexes) {
+        const indexExists = await sql`
 					SELECT EXISTS (
-						SELECT FROM pg_indexes 
+						SELECT FROM pg_indexes
 						WHERE indexname = ${index.name}
 					)
 				`;
 
-				if (!indexExists[0].exists) {
-					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`Created index: ${index.name}`);
-				} else {
-					console.log(`Index ${index.name} already exists, skipping...`);
-				}
-			}
+        if (!indexExists[0].exists) {
+          await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+          console.log(`Created index: ${index.name}`);
+        } else {
+          console.log(`Index ${index.name} already exists, skipping...`);
+        }
+      }
 
-			// Check and create indexes for api_logs table
-			const apiLogIndexes = [
-				{ name: 'idx_api_logs_clerk_id', table: 'api_logs', column: 'clerk_id' },
-				{ name: 'idx_api_logs_created_at', table: 'api_logs', column: 'created_at' }
-			];
+      // Check and create indexes for api_logs table
+      const apiLogIndexes = [
+        {
+          name: 'idx_api_logs_clerk_id',
+          table: 'api_logs',
+          column: 'clerk_id',
+        },
+        {
+          name: 'idx_api_logs_created_at',
+          table: 'api_logs',
+          column: 'created_at',
+        },
+      ];
 
-			for (const index of apiLogIndexes) {
-				const indexExists = await sql`
+      for (const index of apiLogIndexes) {
+        const indexExists = await sql`
 					SELECT EXISTS (
-						SELECT FROM pg_indexes 
+						SELECT FROM pg_indexes
 						WHERE indexname = ${index.name}
 					)
 				`;
 
-				if (!indexExists[0].exists) {
-					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`Created index: ${index.name}`);
-				} else {
-					console.log(`Index ${index.name} already exists, skipping...`);
-				}
-			}
+        if (!indexExists[0].exists) {
+          await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+          console.log(`Created index: ${index.name}`);
+        } else {
+          console.log(`Index ${index.name} already exists, skipping...`);
+        }
+      }
 
-			console.log('All indexes checked and created successfully');
-		},
-	},
+      console.log('All indexes checked and created successfully');
+    },
+  },
 
-	{
-		id: '005_add_workout_tables',
-		description: 'Add workout sessions and exercises tables',
-		up: async () => {
-			console.log('Running migration: Add workout tables...');
+  {
+    id: '005_add_workout_tables',
+    description: 'Add workout sessions and exercises tables',
+    up: async () => {
+      console.log('Running migration: Add workout tables...');
 
-			// Check if workout_sessions table exists
-			const sessionsTableExists = await sql`
+      // Check if workout_sessions table exists
+      const sessionsTableExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.tables 
-					WHERE table_schema = 'public' 
+					SELECT FROM information_schema.tables
+					WHERE table_schema = 'public'
 					AND table_name = 'workout_sessions'
 				)
 			`;
 
-			if (!sessionsTableExists[0].exists) {
-				await sql`
+      if (!sessionsTableExists[0].exists) {
+        await sql`
 					CREATE TABLE workout_sessions (
 						id SERIAL PRIMARY KEY,
 						clerk_id VARCHAR(255) NOT NULL,
@@ -337,22 +364,22 @@ const migrations = [
 						updated_at TIMESTAMP DEFAULT NOW()
 					)
 				`;
-				console.log('workout_sessions table created');
-			} else {
-				console.log('workout_sessions table already exists, skipping...');
-			}
+        console.log('workout_sessions table created');
+      } else {
+        console.log('workout_sessions table already exists, skipping...');
+      }
 
-			// Check if workout_exercises table exists
-			const exercisesTableExists = await sql`
+      // Check if workout_exercises table exists
+      const exercisesTableExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.tables 
-					WHERE table_schema = 'public' 
+					SELECT FROM information_schema.tables
+					WHERE table_schema = 'public'
 					AND table_name = 'workout_exercises'
 				)
 			`;
 
-			if (!exercisesTableExists[0].exists) {
-				await sql`
+      if (!exercisesTableExists[0].exists) {
+        await sql`
 					CREATE TABLE workout_exercises (
 						id SERIAL PRIMARY KEY,
 						workout_session_id INTEGER NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
@@ -369,54 +396,70 @@ const migrations = [
 						updated_at TIMESTAMP DEFAULT NOW()
 					)
 				`;
-				console.log('workout_exercises table created');
-			} else {
-				console.log('workout_exercises table already exists, skipping...');
-			}
+        console.log('workout_exercises table created');
+      } else {
+        console.log('workout_exercises table already exists, skipping...');
+      }
 
-			// Create indexes for workout tables
-			const workoutIndexes = [
-				{ name: 'idx_workout_sessions_clerk_id', table: 'workout_sessions', column: 'clerk_id' },
-				{ name: 'idx_workout_sessions_date', table: 'workout_sessions', column: 'scheduled_date' },
-				{ name: 'idx_workout_exercises_session_id', table: 'workout_exercises', column: 'workout_session_id' },
-				{ name: 'idx_workout_exercises_order', table: 'workout_exercises', column: 'order_index' }
-			];
+      // Create indexes for workout tables
+      const workoutIndexes = [
+        {
+          name: 'idx_workout_sessions_clerk_id',
+          table: 'workout_sessions',
+          column: 'clerk_id',
+        },
+        {
+          name: 'idx_workout_sessions_date',
+          table: 'workout_sessions',
+          column: 'scheduled_date',
+        },
+        {
+          name: 'idx_workout_exercises_session_id',
+          table: 'workout_exercises',
+          column: 'workout_session_id',
+        },
+        {
+          name: 'idx_workout_exercises_order',
+          table: 'workout_exercises',
+          column: 'order_index',
+        },
+      ];
 
-			for (const index of workoutIndexes) {
-				const indexExists = await sql`
+      for (const index of workoutIndexes) {
+        const indexExists = await sql`
 					SELECT EXISTS (
-						SELECT FROM pg_indexes 
+						SELECT FROM pg_indexes
 						WHERE indexname = ${index.name}
 					)
 				`;
 
-				if (!indexExists[0].exists) {
-					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`Created index: ${index.name}`);
-				} else {
-					console.log(`Index ${index.name} already exists, skipping...`);
-				}
-			}
-		},
-	},
+        if (!indexExists[0].exists) {
+          await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+          console.log(`Created index: ${index.name}`);
+        } else {
+          console.log(`Index ${index.name} already exists, skipping...`);
+        }
+      }
+    },
+  },
 
-	{
-		id: '006_add_deep_focus_table',
-		description: 'Add deep focus sessions table',
-		up: async () => {
-			console.log('Running migration: Add deep focus table...');
+  {
+    id: '006_add_deep_focus_table',
+    description: 'Add deep focus sessions table',
+    up: async () => {
+      console.log('Running migration: Add deep focus table...');
 
-			// Check if deep_focus_sessions table exists
-			const tableExists = await sql`
+      // Check if deep_focus_sessions table exists
+      const tableExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.tables 
-					WHERE table_schema = 'public' 
+					SELECT FROM information_schema.tables
+					WHERE table_schema = 'public'
 					AND table_name = 'deep_focus_sessions'
 				)
 			`;
 
-			if (!tableExists[0].exists) {
-				await sql`
+      if (!tableExists[0].exists) {
+        await sql`
 					CREATE TABLE deep_focus_sessions (
 						id SERIAL PRIMARY KEY,
 						clerk_id VARCHAR(255) NOT NULL,
@@ -430,154 +473,171 @@ const migrations = [
 						updated_at TIMESTAMP DEFAULT NOW()
 					)
 				`;
-				console.log('deep_focus_sessions table created');
-			} else {
-				console.log('deep_focus_sessions table already exists, skipping...');
-			}
+        console.log('deep_focus_sessions table created');
+      } else {
+        console.log('deep_focus_sessions table already exists, skipping...');
+      }
 
-			// Create indexes for deep focus table
-			const deepFocusIndexes = [
-				{ name: 'idx_deep_focus_clerk_id', table: 'deep_focus_sessions', column: 'clerk_id' },
-				{ name: 'idx_deep_focus_date', table: 'deep_focus_sessions', column: 'session_date' },
-				{ name: 'idx_deep_focus_created_at', table: 'deep_focus_sessions', column: 'created_at' }
-			];
+      // Create indexes for deep focus table
+      const deepFocusIndexes = [
+        {
+          name: 'idx_deep_focus_clerk_id',
+          table: 'deep_focus_sessions',
+          column: 'clerk_id',
+        },
+        {
+          name: 'idx_deep_focus_date',
+          table: 'deep_focus_sessions',
+          column: 'session_date',
+        },
+        {
+          name: 'idx_deep_focus_created_at',
+          table: 'deep_focus_sessions',
+          column: 'created_at',
+        },
+      ];
 
-			for (const index of deepFocusIndexes) {
-				const indexExists = await sql`
+      for (const index of deepFocusIndexes) {
+        const indexExists = await sql`
 					SELECT EXISTS (
-						SELECT FROM pg_indexes 
+						SELECT FROM pg_indexes
 						WHERE indexname = ${index.name}
 					)
 				`;
 
-				if (!indexExists[0].exists) {
-					await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					console.log(`Created index: ${index.name}`);
-				} else {
-					console.log(`Index ${index.name} already exists, skipping...`);
-				}
-			}
-		},
-	},
+        if (!indexExists[0].exists) {
+          await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+          console.log(`Created index: ${index.name}`);
+        } else {
+          console.log(`Index ${index.name} already exists, skipping...`);
+        }
+      }
+    },
+  },
 
-	{
-		id: '007_add_image_url_to_meals',
-		description: 'Add image_url column to meals table for meal photos',
-		up: async () => {
-			console.log('Running migration: Add image_url column to meals table...');
+  {
+    id: '007_add_image_url_to_meals',
+    description: 'Add image_url column to meals table for meal photos',
+    up: async () => {
+      console.log('Running migration: Add image_url column to meals table...');
 
-			// Check if image_url column already exists
-			const columnExists = await sql`
+      // Check if image_url column already exists
+      const columnExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.columns 
-					WHERE table_name = 'meals' 
+					SELECT FROM information_schema.columns
+					WHERE table_name = 'meals'
 					AND column_name = 'image_url'
 				)
 			`;
 
-			if (!columnExists[0].exists) {
-				// Add image_url column to meals table
-				await sql`ALTER TABLE meals ADD COLUMN image_url TEXT`;
-				console.log('image_url column added to meals table');
-			} else {
-				console.log('image_url column already exists in meals table, skipping...');
-			}
+      if (!columnExists[0].exists) {
+        // Add image_url column to meals table
+        await sql`ALTER TABLE meals ADD COLUMN image_url TEXT`;
+        console.log('image_url column added to meals table');
+      } else {
+        console.log(
+          'image_url column already exists in meals table, skipping...'
+        );
+      }
 
-			// Create index for image_url column
-			const indexExists = await sql`
+      // Create index for image_url column
+      const indexExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM pg_indexes 
+					SELECT FROM pg_indexes
 					WHERE indexname = 'idx_meals_image_url'
 				)
 			`;
 
-			if (!indexExists[0].exists) {
-				await sql`CREATE INDEX idx_meals_image_url ON meals(image_url)`;
-				console.log('Created index: idx_meals_image_url');
-			} else {
-				console.log('Index idx_meals_image_url already exists, skipping...');
-			}
-		},
-	},
+      if (!indexExists[0].exists) {
+        await sql`CREATE INDEX idx_meals_image_url ON meals(image_url)`;
+        console.log('Created index: idx_meals_image_url');
+      } else {
+        console.log('Index idx_meals_image_url already exists, skipping...');
+      }
+    },
+  },
 
-	{
-		id: '008_add_username_field',
-		description: 'Add username field to users table',
-		up: async () => {
-			console.log('Running migration: Add username field to users table...');
+  {
+    id: '008_add_username_field',
+    description: 'Add username field to users table',
+    up: async () => {
+      console.log('Running migration: Add username field to users table...');
 
-			// Check if username column already exists
-			const columnExists = await sql`
+      // Check if username column already exists
+      const columnExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.columns 
-					WHERE table_name = 'users' 
+					SELECT FROM information_schema.columns
+					WHERE table_name = 'users'
 					AND column_name = 'username'
 				)
 			`;
 
-			if (!columnExists[0].exists) {
-				// Add username column to users table
-				await sql`ALTER TABLE users ADD COLUMN username TEXT`;
-				console.log('username column added to users table');
-			} else {
-				console.log('username column already exists in users table, skipping...');
-			}
+      if (!columnExists[0].exists) {
+        // Add username column to users table
+        await sql`ALTER TABLE users ADD COLUMN username TEXT`;
+        console.log('username column added to users table');
+      } else {
+        console.log(
+          'username column already exists in users table, skipping...'
+        );
+      }
 
-			// Add unique constraint for username (allows NULL values initially)
-			const constraintExists = await sql`
+      // Add unique constraint for username (allows NULL values initially)
+      const constraintExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.table_constraints 
-					WHERE table_name = 'users' 
+					SELECT FROM information_schema.table_constraints
+					WHERE table_name = 'users'
 					AND constraint_name = 'unique_username'
 				)
 			`;
 
-			if (!constraintExists[0].exists) {
-				await sql`ALTER TABLE users ADD CONSTRAINT unique_username UNIQUE (username)`;
-				console.log('unique_username constraint added');
-			} else {
-				console.log('unique_username constraint already exists, skipping...');
-			}
+      if (!constraintExists[0].exists) {
+        await sql`ALTER TABLE users ADD CONSTRAINT unique_username UNIQUE (username)`;
+        console.log('unique_username constraint added');
+      } else {
+        console.log('unique_username constraint already exists, skipping...');
+      }
 
-			// Create index for username lookups
-			const indexExists = await sql`
+      // Create index for username lookups
+      const indexExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM pg_indexes 
+					SELECT FROM pg_indexes
 					WHERE indexname = 'idx_users_username'
 				)
 			`;
 
-			if (!indexExists[0].exists) {
-				await sql`CREATE INDEX idx_users_username ON users(username)`;
-				console.log('Created index: idx_users_username');
-			} else {
-				console.log('Index idx_users_username already exists, skipping...');
-			}
+      if (!indexExists[0].exists) {
+        await sql`CREATE INDEX idx_users_username ON users(username)`;
+        console.log('Created index: idx_users_username');
+      } else {
+        console.log('Index idx_users_username already exists, skipping...');
+      }
 
-			// Add comment to document the column
-			await sql`COMMENT ON COLUMN users.username IS 'Unique username for user identification and display'`;
-			console.log('Added comment to username column');
-		},
-	},
+      // Add comment to document the column
+      await sql`COMMENT ON COLUMN users.username IS 'Unique username for user identification and display'`;
+      console.log('Added comment to username column');
+    },
+  },
 
-	{
-		id: '009_create_daily_quests_table',
-		description: 'Create daily_quests table for tracking user daily quest completion and streaks',
-		up: async () => {
-			console.log('Running migration: Create daily_quests table...');
+  {
+    id: '009_create_daily_quests_table',
+    description:
+      'Create daily_quests table for tracking user daily quest completion and streaks',
+    up: async () => {
+      console.log('Running migration: Create daily_quests table...');
 
-			// Check if daily_quests table already exists
-			const tableExists = await sql`
+      // Check if daily_quests table already exists
+      const tableExists = await sql`
 				SELECT EXISTS (
-					SELECT FROM information_schema.tables 
-					WHERE table_schema = 'public' 
+					SELECT FROM information_schema.tables
+					WHERE table_schema = 'public'
 					AND table_name = 'daily_quests'
 				)
 			`;
 
-			if (!tableExists[0].exists) {
-				// Create daily_quests table
-				await sql`
+      if (!tableExists[0].exists) {
+        // Create daily_quests table
+        await sql`
 					CREATE TABLE daily_quests (
 						id SERIAL PRIMARY KEY,
 						clerk_id TEXT NOT NULL,
@@ -592,162 +652,236 @@ const migrations = [
 						UNIQUE(clerk_id, date)
 					)
 				`;
-				console.log('daily_quests table created');
-			} else {
-				console.log('daily_quests table already exists, skipping...');
-			}
+        console.log('daily_quests table created');
+      } else {
+        console.log('daily_quests table already exists, skipping...');
+      }
 
-			// Create indexes for daily_quests table
-			const dailyQuestIndexes = [
-				{ name: 'idx_daily_quests_clerk_id', table: 'daily_quests', column: 'clerk_id' },
-				{ name: 'idx_daily_quests_date', table: 'daily_quests', column: 'date' },
-				{ name: 'idx_daily_quests_clerk_date', table: 'daily_quests', columns: ['clerk_id', 'date'] },
-				{ name: 'idx_daily_quests_created_at', table: 'daily_quests', column: 'created_at' }
-			];
+      // Create indexes for daily_quests table
+      const dailyQuestIndexes = [
+        {
+          name: 'idx_daily_quests_clerk_id',
+          table: 'daily_quests',
+          column: 'clerk_id',
+        },
+        {
+          name: 'idx_daily_quests_date',
+          table: 'daily_quests',
+          column: 'date',
+        },
+        {
+          name: 'idx_daily_quests_clerk_date',
+          table: 'daily_quests',
+          columns: ['clerk_id', 'date'],
+        },
+        {
+          name: 'idx_daily_quests_created_at',
+          table: 'daily_quests',
+          column: 'created_at',
+        },
+      ];
 
-			for (const index of dailyQuestIndexes) {
-				const indexExists = await sql`
+      for (const index of dailyQuestIndexes) {
+        const indexExists = await sql`
 					SELECT EXISTS (
-						SELECT FROM pg_indexes 
+						SELECT FROM pg_indexes
 						WHERE indexname = ${index.name}
 					)
 				`;
 
-				if (!indexExists[0].exists) {
-					if (index.columns) {
-						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.columns.join(', '))})`;
-					} else {
-						await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
-					}
-					console.log(`Created index: ${index.name}`);
-				} else {
-					console.log(`Index ${index.name} already exists, skipping...`);
-				}
-			}
+        if (!indexExists[0].exists) {
+          if (index.columns) {
+            await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.columns.join(', '))})`;
+          } else {
+            await sql`CREATE INDEX ${sql.unsafe(index.name)} ON ${sql.unsafe(index.table)}(${sql.unsafe(index.column)})`;
+          }
+          console.log(`Created index: ${index.name}`);
+        } else {
+          console.log(`Index ${index.name} already exists, skipping...`);
+        }
+      }
 
-			// Add comment to table
-			await sql`COMMENT ON TABLE daily_quests IS 'Tracks user daily quest completion status and streaks for weight logging, meal logging, and exercise logging'`;
-			console.log('Added comment to daily_quests table');
-		},
-	},
+      // Add comment to table
+      await sql`COMMENT ON TABLE daily_quests IS 'Tracks user daily quest completion status and streaks for weight logging, meal logging, and exercise logging'`;
+      console.log('Added comment to daily_quests table');
+    },
+  },
+
+  {
+    id: '010_add_ingredients_to_meals',
+    description: 'Add ingredients column to meals table for recipe-based meals',
+    up: async () => {
+      console.log(
+        'Running migration: Add ingredients column to meals table...'
+      );
+
+      // Check if ingredients column already exists
+      const columnExists = await sql`
+				SELECT EXISTS (
+					SELECT FROM information_schema.columns
+					WHERE table_name = 'meals'
+					AND column_name = 'ingredients'
+				)
+			`;
+
+      if (!columnExists[0].exists) {
+        // Add ingredients column to meals table
+        await sql`ALTER TABLE meals ADD COLUMN ingredients JSONB DEFAULT '[]'::jsonb`;
+        console.log('ingredients column added to meals table');
+      } else {
+        console.log(
+          'ingredients column already exists in meals table, skipping...'
+        );
+      }
+
+      // Create GIN index for ingredients column for better query performance
+      const indexExists = await sql`
+				SELECT EXISTS (
+					SELECT FROM pg_indexes
+					WHERE indexname = 'idx_meals_ingredients'
+				)
+			`;
+
+      if (!indexExists[0].exists) {
+        await sql`CREATE INDEX idx_meals_ingredients ON meals USING GIN (ingredients)`;
+        console.log('Created GIN index: idx_meals_ingredients');
+      } else {
+        console.log('Index idx_meals_ingredients already exists, skipping...');
+      }
+
+      // Update existing meals to have empty ingredients array if NULL
+      await sql`UPDATE meals SET ingredients = '[]'::jsonb WHERE ingredients IS NULL`;
+      console.log('Updated existing meals with empty ingredients array');
+
+      // Add comment to document the column
+      await sql`COMMENT ON COLUMN meals.ingredients IS 'Array of ingredients for recipe-based meals, stored as [["ingredient_name", "amount"], ...]'`;
+      console.log('Added comment to ingredients column');
+    },
+  },
 ];
 
 // Create migrations table
 async function createMigrationsTable() {
-	console.log('Creating migrations table...');
+  console.log('Creating migrations table...');
 
-	const tableExists = await sql`
+  const tableExists = await sql`
     SELECT EXISTS (
-      SELECT FROM information_schema.tables 
-      WHERE table_schema = 'public' 
+      SELECT FROM information_schema.tables
+      WHERE table_schema = 'public'
       AND table_name = 'migrations'
     )
   `;
 
-	if (!tableExists[0].exists) {
-		await sql`
+  if (!tableExists[0].exists) {
+    await sql`
       CREATE TABLE migrations (
         id TEXT PRIMARY KEY,
         description TEXT NOT NULL,
         executed_at TIMESTAMP DEFAULT NOW()
       )
     `;
-		console.log('migrations table created');
-	} else {
-		console.log('migrations table already exists');
-	}
+    console.log('migrations table created');
+  } else {
+    console.log('migrations table already exists');
+  }
 }
 
 // Get executed migrations
 async function getExecutedMigrations() {
-	const executed = await sql`SELECT id FROM migrations ORDER BY executed_at`;
-	return executed.map(row => row.id);
+  const executed = await sql`SELECT id FROM migrations ORDER BY executed_at`;
+  return executed.map(row => row.id);
 }
 
 // Mark migration as executed
 async function markMigrationExecuted(migrationId, description) {
-	await sql`
-    INSERT INTO migrations (id, description) 
+  await sql`
+    INSERT INTO migrations (id, description)
     VALUES (${migrationId}, ${description})
   `;
 }
 
 // Run migrations
 async function runMigrations() {
-	try {
-		console.log('Starting database migrations...\n');
+  try {
+    console.log('Starting database migrations...\n');
 
-		// Create migrations table if it doesn't exist
-		await createMigrationsTable();
+    // Create migrations table if it doesn't exist
+    await createMigrationsTable();
 
-		// Get already executed migrations
-		const executedMigrations = await getExecutedMigrations();
+    // Get already executed migrations
+    const executedMigrations = await getExecutedMigrations();
 
-		// Run pending migrations
-		for (const migration of migrations) {
-			if (!executedMigrations.includes(migration.id)) {
-				console.log(`\nMigration: ${migration.description}`);
-				console.log(`ID: ${migration.id}`);
+    // Run pending migrations
+    for (const migration of migrations) {
+      if (!executedMigrations.includes(migration.id)) {
+        console.log(`\nMigration: ${migration.description}`);
+        console.log(`ID: ${migration.id}`);
 
-				await migration.up();
-				await markMigrationExecuted(migration.id, migration.description);
+        await migration.up();
+        await markMigrationExecuted(migration.id, migration.description);
 
-				console.log(`Migration ${migration.id} completed successfully\n`);
-			} else {
-				console.log(`Migration ${migration.id} already executed, skipping...`);
-			}
-		}
+        console.log(`Migration ${migration.id} completed successfully\n`);
+      } else {
+        console.log(`Migration ${migration.id} already executed, skipping...`);
+      }
+    }
 
-		console.log('All migrations completed successfully!');
-	} catch (error) {
-		console.error('Migration failed:', error);
-		process.exit(1);
-	}
+    console.log('All migrations completed successfully!');
+  } catch (error) {
+    console.error('Migration failed:', error);
+    process.exit(1);
+  }
 }
 
 // Show migration status
 async function showMigrationStatus() {
-	try {
-		console.log('Migration Status:\n');
+  try {
+    console.log('Migration Status:\n');
 
-		await createMigrationsTable();
-		const executedMigrations = await getExecutedMigrations();
+    await createMigrationsTable();
+    const executedMigrations = await getExecutedMigrations();
 
-		console.log('Executed migrations:');
-		if (executedMigrations.length === 0) {
-			console.log('  None');
-		} else {
-			executedMigrations.forEach(id => {
-				console.log(`  - ${id}`);
-			});
-		}
+    console.log('Executed migrations:');
+    if (executedMigrations.length === 0) {
+      console.log('  None');
+    } else {
+      executedMigrations.forEach(id => {
+        console.log(`  - ${id}`);
+      });
+    }
 
-		console.log('\nPending migrations:');
-		const pendingMigrations = migrations.filter(m => !executedMigrations.includes(m.id));
-		if (pendingMigrations.length === 0) {
-			console.log('  None');
-		} else {
-			pendingMigrations.forEach(migration => {
-				console.log(`  - ${migration.id}: ${migration.description}`);
-			});
-		}
-	} catch (error) {
-		console.error('Error checking migration status:', error);
-	}
+    console.log('\nPending migrations:');
+    const pendingMigrations = migrations.filter(
+      m => !executedMigrations.includes(m.id)
+    );
+    if (pendingMigrations.length === 0) {
+      console.log('  None');
+    } else {
+      pendingMigrations.forEach(migration => {
+        console.log(`  - ${migration.id}: ${migration.description}`);
+      });
+    }
+  } catch (error) {
+    console.error('Error checking migration status:', error);
+  }
 }
 
 // Main execution
 const command = process.argv[2];
 
 if (command === 'status') {
-	showMigrationStatus();
+  showMigrationStatus();
 } else if (command === 'migrate') {
-	runMigrations();
+  runMigrations();
 } else {
-	console.log('Usage:');
-	console.log('  node scripts/migrate-database.js migrate  - Run pending migrations');
-	console.log('  node scripts/migrate-database.js status   - Show migration status');
-	console.log('\nExamples:');
-	console.log('  node scripts/migrate-database.js migrate');
-	console.log('  node scripts/migrate-database.js status');
-} 
+  console.log('Usage:');
+  console.log(
+    '  node scripts/migrate-database.js migrate  - Run pending migrations'
+  );
+  console.log(
+    '  node scripts/migrate-database.js status   - Show migration status'
+  );
+  console.log('\nExamples:');
+  console.log('  node scripts/migrate-database.js migrate');
+  console.log('  node scripts/migrate-database.js status');
+}
