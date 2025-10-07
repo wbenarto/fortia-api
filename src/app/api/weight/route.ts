@@ -37,26 +37,54 @@ export async function POST(request: NextRequest) {
     try {
       // Get user's data to calculate new BMR
       const userData = await sql`
-				SELECT height, age, gender, activity_level 
+				SELECT height, age, gender, activity_level, fitness_goal 
 				FROM users 
 				WHERE clerk_id = ${clerkId}
 			`;
 
       if (userData.length > 0) {
         const user = userData[0];
+        console.log(user)
         const newBMR = Math.round(calculateBMR(weight, user.height, user.age, user.gender));
-        const newTDEE = calculateTDEE(newBMR, user.activity_level);
+        const newTDEE = calculateTDEE(newBMR, user.fitness_goal);
 
-        // Update user with new weight, BMR and TDEE
+         // Calculate daily macros based on new TDEE
+        let dailyCalories = 0
+        let dailyProtein = 0
+        let dailyCarbs = 0
+        let dailyFats = 0
+
+        if (user.fitness_goal == 'lose_weight') {
+          dailyCalories = Math.round(newTDEE * 0.8);
+          dailyProtein = Math.round((dailyCalories * 0.25) / 4); // 25% protein
+          dailyCarbs = Math.round((dailyCalories * 0.45) / 4);   // 45% carbs
+          dailyFats = Math.round((dailyCalories * 0.3) / 9);     // 30% fats
+        } else if (user.fitness_goal === 'gain_muscle') {
+          dailyCalories = Math.round(newTDEE * 0.9);
+          dailyProtein = Math.round((dailyCalories * 0.40) / 4); // 25% protein
+          dailyCarbs = Math.round((dailyCalories * 0.30) / 4);   // 45% carbs
+          dailyFats = Math.round((dailyCalories * 0.30) / 9);     // 30% fats
+        } else {
+          dailyCalories = Math.round(newTDEE * 0.9);
+          dailyProtein = Math.round((dailyCalories * 0.25) / 4); // 25% protein
+          dailyCarbs = Math.round((dailyCalories * 0.45) / 4);   // 45% carbs
+          dailyFats = Math.round((dailyCalories * 0.3) / 9);     // 30% fats
+        }
+        // Update user with new weight, BMR, TDEE, and daily macros
         await sql`
-					UPDATE users 
-					SET 
-						weight = ${weight},
-						bmr = ${newBMR},
-						tdee = ${newTDEE},
-						updated_at = NOW()
-					WHERE clerk_id = ${clerkId}
-				`;
+          UPDATE users 
+          SET 
+            weight = ${weight},
+            bmr = ${newBMR},
+            tdee = ${newTDEE},
+            daily_calories = ${dailyCalories},
+            daily_protein = ${dailyProtein},
+            daily_carbs = ${dailyCarbs},
+            daily_fats = ${dailyFats},
+            updated_at = NOW()
+          WHERE clerk_id = ${clerkId}
+        `;
+
 
         // BMR and TDEE updated successfully
       }
