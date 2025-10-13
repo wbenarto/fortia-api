@@ -5,8 +5,8 @@
 
 /**
  * Calculate BMR using Mifflin-St Jeor Equation
- * @param weight - Weight in kg
- * @param height - Height in cm
+ * @param weight - Weight in pounds (will be converted to kg)
+ * @param height - Height in centimeters
  * @param age - Age in years
  * @param gender - 'male' or 'female'
  * @returns BMR in calories per day
@@ -21,6 +21,7 @@ export function calculateBMR(
   const weightInKg = weight * 0.453592;
   console.log('calculating bmr ', weight, height, age, gender);
 
+  // Height is already in centimeters (stored in DB as cm)
   if (gender === 'male') {
     return 10 * weightInKg + 6.25 * height - 5 * age + 5;
   } else {
@@ -34,29 +35,19 @@ export function calculateBMR(
  * @param activityLevel - Activity level string
  * @returns TDEE in calories per day
  */
-export function calculateTDEE(bmr: number, fitnessGoal: string): number {
-  // const activityMultipliers = {
-  //   sedentary: 1.2, // Little or no exercise
-  //   light: 1.375, // Light exercise 1-3 days/week
-  //   moderate: 1.55, // Moderate exercise 3-5 days/week
-  //   active: 1.725, // Hard exercise 6-7 days/week
-  //   very_active: 1.9, // Very hard exercise, physical job
-  // };
-
-  const fitnessGoalMultipliers = {
-    lose_weight: 0.9,
-    gain_muscle: 1.1,
-    maintain: 0.9,
-    improve_fitness: 1,
+export function calculateTDEE(bmr: number, activityLevel: string): number {
+  const activityMultipliers = {
+    sedentary: 1.2, // Little or no exercise
+    light: 1.375, // Light exercise 1-3 days/week
+    moderate: 1.55, // Moderate exercise 3-5 days/week
+    active: 1.725, // Hard exercise 6-7 days/week
+    very_active: 1.9, // Very hard exercise, physical job
   };
-  console.log('yes');
 
-  // const multiplier = activityMultipliers[activityLevel as keyof typeof activityMultipliers] || 1.2;
   const multiplier =
-    fitnessGoalMultipliers[
-      fitnessGoal as keyof typeof fitnessGoalMultipliers
-    ] || 1.1;
-  return Math.round(bmr * 1.2);
+    activityMultipliers[activityLevel as keyof typeof activityMultipliers] ||
+    1.2;
+  return Math.round(bmr * multiplier);
 }
 
 /**

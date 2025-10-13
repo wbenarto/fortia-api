@@ -1,8 +1,9 @@
-import { neon } from '@neondatabase/serverless';
-import { NextRequest, NextResponse } from 'next/server';
+import { checkUserAuthStatus } from '@/lib/authUtils';
+import { calculateBodyFatPercentage } from '@/lib/bodyFatUtils';
 import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
 import { validateOnboardingData } from '@/lib/userUtils';
-import { checkUserAuthStatus } from '@/lib/authUtils';
+import { neon } from '@neondatabase/serverless';
+import { NextRequest, NextResponse } from 'next/server';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
       dailyFats,
       bmr,
       tdee,
+      bodyFatPercentage,
     } = await request.json();
 
     clerkId = clerkIdParam;
@@ -87,7 +89,9 @@ export async function POST(request: NextRequest) {
     });
 
     if (!validation.isValid) {
-      return ErrorResponses.badRequest(`Validation failed: ${validation.errors.join(', ')}`);
+      return ErrorResponses.badRequest(
+        `Validation failed: ${validation.errors.join(', ')}`
+      );
     }
 
     // First check if user already exists
@@ -115,6 +119,7 @@ export async function POST(request: NextRequest) {
           daily_fats = ${dailyFats},
           bmr = ${bmr},
           tdee = ${tdee},
+          body_fat_percentage = ${bodyFatPercentage},
           updated_at = NOW()
         WHERE clerk_id = ${clerkId}
         RETURNING *
@@ -153,6 +158,7 @@ export async function POST(request: NextRequest) {
         daily_fats,
         bmr,
         tdee,
+        body_fat_percentage,
         created_at,
         updated_at
       ) VALUES (
@@ -176,6 +182,7 @@ export async function POST(request: NextRequest) {
         ${dailyFats},
         ${bmr},
         ${tdee},
+        ${bodyFatPercentage},
         NOW(),
         NOW()
       )
@@ -270,7 +277,9 @@ export async function PUT(request: NextRequest) {
     });
 
     if (!validation.isValid) {
-      return ErrorResponses.badRequest(`Validation failed: ${validation.errors.join(', ')}`);
+      return ErrorResponses.badRequest(
+        `Validation failed: ${validation.errors.join(', ')}`
+      );
     }
 
     // First check if user exists
@@ -279,13 +288,15 @@ export async function PUT(request: NextRequest) {
 		`;
 
     if (existingUser.length === 0) {
-      return ErrorResponses.notFound('User not found. Please complete sign-up first.');
+      return ErrorResponses.notFound(
+        'User not found. Please complete sign-up first.'
+      );
     }
 
     // Update user with onboarding information
     const result = await sql`
-      UPDATE users 
-      SET 
+      UPDATE users
+      SET
         first_name = COALESCE(${firstName}, first_name),
         last_name = COALESCE(${lastName}, last_name),
         dob = COALESCE(${dob}, dob),
@@ -311,6 +322,32 @@ export async function PUT(request: NextRequest) {
       WHERE clerk_id = ${clerkId}
       RETURNING *
     `;
+
+    // Recalculate body fat if weight, height, age, or gender changed
+    if (weight || height || age || gender) {
+      const updatedUser = result[0];
+      if (
+        updatedUser &&
+        updatedUser.weight &&
+        updatedUser.height &&
+        updatedUser.age &&
+        updatedUser.gender
+      ) {
+        const heightInInches = updatedUser.height / 2.54; // Convert cm to inches
+        const bodyFatPercentage = calculateBodyFatPercentage(
+          updatedUser.weight,
+          heightInInches,
+          updatedUser.age,
+          updatedUser.gender
+        );
+
+        await sql`
+          UPDATE users
+          SET body_fat_percentage = ${bodyFatPercentage}
+          WHERE clerk_id = ${clerkId}
+        `;
+      }
+    }
 
     return NextResponse.json({ success: true, data: result[0] });
   } catch (error) {

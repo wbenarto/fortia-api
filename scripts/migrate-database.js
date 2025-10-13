@@ -758,6 +758,39 @@ const migrations = [
       console.log('Added comment to ingredients column');
     },
   },
+
+  {
+    id: '011_add_body_fat_percentage',
+    description: 'Add body fat percentage column to users table',
+    up: async () => {
+      console.log(
+        'Running migration: Add body fat percentage column to users table...'
+      );
+
+      // Check if body_fat_percentage column already exists
+      const columnExists = await sql`
+        SELECT EXISTS (
+          SELECT FROM information_schema.columns
+          WHERE table_name = 'users'
+          AND column_name = 'body_fat_percentage'
+        )
+      `;
+
+      if (!columnExists[0].exists) {
+        // Add body fat percentage column to users table
+        await sql`ALTER TABLE users ADD COLUMN body_fat_percentage DECIMAL(5,2)`;
+        console.log('body_fat_percentage column added to users table');
+      } else {
+        console.log(
+          'body_fat_percentage column already exists in users table, skipping...'
+        );
+      }
+
+      // Add comment to document the column
+      await sql`COMMENT ON COLUMN users.body_fat_percentage IS 'Calculated body fat percentage using Deurenberg formula (0-50%)'`;
+      console.log('Added comment to body_fat_percentage column');
+    },
+  },
 ];
 
 // Create migrations table
