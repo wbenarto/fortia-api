@@ -36,14 +36,21 @@ export function calculateBMR(
  * @returns TDEE in calories per day
  */
 export function calculateTDEE(bmr: number, activityLevel: string): number {
-  const activityMultipliers = {
-    sedentary: 1.2, // Little or no exercise
-    light: 1.375, // Light exercise 1-3 days/week
-    moderate: 1.55, // Moderate exercise 3-5 days/week
-    active: 1.725, // Hard exercise 6-7 days/week
-    very_active: 1.9, // Very hard exercise, physical job
-  };
+  // const activityMultipliers = {
+  //   sedentary: 1.2, // Little or no exercise
+  //   light: 1.375, // Light exercise 1-3 days/week
+  //   moderate: 1.55, // Moderate exercise 3-5 days/week
+  //   active: 1.725, // Hard exercise 6-7 days/week
+  //   very_active: 1.9, // Very hard exercise, physical job
+  // };
 
+  const activityMultipliers = {
+    sedentary: 1.1, // Little or no exercise
+    light: 1.2, // Light exercise 1-3 days/week
+    moderate: 1.4, // Moderate exercise 3-5 days/week
+    active: 1.5, // Hard exercise 6-7 days/week
+    very_active: 1.8, // Very hard exercise, physical job
+  };
   const multiplier =
     activityMultipliers[activityLevel as keyof typeof activityMultipliers] ||
     1.2;
