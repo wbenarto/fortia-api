@@ -127,36 +127,56 @@ export async function POST(request: NextRequest) {
     // Handle exercises based on type
     if (type === 'exercise') {
       // For single exercise, create one workout_exercise entry
+
       await sql`
 				INSERT INTO workout_exercises (workout_session_id, exercise_name, duration, order_index, calories_burned)
 				VALUES (${sessionId}, ${title}, ${duration}, 1, ${body.calories_burned || null})
 			`;
     } else if (type === 'barbell') {
       // For multi-exercise workout, create entries for each exercise
+
+      if (!exercises || exercises.length === 0) {
+        return NextResponse.json(
+          { error: 'Barbell workouts must have at least one exercise' },
+          { status: 400 }
+        );
+      }
+
       for (let i = 0; i < exercises.length; i++) {
         const exercise = exercises[i];
-        await sql`
-					INSERT INTO workout_exercises (
-						workout_session_id,
-						exercise_name,
-						sets,
-						reps,
-						weight,
-						duration,
-						order_index,
-						calories_burned
-					)
-					VALUES (
-						${sessionId},
-						${exercise.name},
-						${parseInt(exercise.sets)},
-						${parseInt(exercise.reps)},
-						${parseFloat(exercise.weight)},
-						${exercise.duration},
-						${i + 1},
-						${exercise.calories_burned || null}
-					)
-				`;
+
+        // Validate exercise data
+        if (!exercise.name || !exercise.name.trim()) {
+          continue;
+        }
+
+        try {
+          const result = await sql`
+						INSERT INTO workout_exercises (
+							workout_session_id,
+							exercise_name,
+							sets,
+							reps,
+							weight,
+							duration,
+							order_index,
+							calories_burned
+						)
+						VALUES (
+							${sessionId},
+							${exercise.name},
+							${parseInt(exercise.sets) || null},
+							${parseInt(exercise.reps) || null},
+							${parseFloat(exercise.weight) || null},
+							${exercise.duration || null},
+							${i + 1},
+							${exercise.calories_burned || null}
+						)
+						RETURNING id
+					`;
+        } catch (error) {
+          console.error(`Failed to create exercise ${i + 1}:`, error);
+        }
       }
     }
 
@@ -213,10 +233,21 @@ export async function GET(request: NextRequest) {
 				FROM workout_sessions ws
 				LEFT JOIN workout_exercises we ON ws.id = we.workout_session_id
 				WHERE ws.clerk_id = ${clerkId}
-				AND ws.created_at >= ${start.toISOString()}
-				AND ws.created_at < ${end.toISOString()}
+				AND ws.scheduled_date = ${date}
 				ORDER BY ws.scheduled_date DESC, we.order_index ASC
 			`;
+
+      // Debug: Check if exercises exist for these sessions
+      if (workouts.length > 0) {
+        const sessionIds = workouts.map(w => w.session_id);
+
+        const exerciseCheck = await sql`
+          SELECT workout_session_id, exercise_name, sets, reps, weight, duration
+          FROM workout_exercises
+          WHERE workout_session_id = ANY(${sessionIds})
+          ORDER BY workout_session_id, order_index
+        `;
+      }
     } else {
       workouts = await sql`
 				SELECT
@@ -278,9 +309,11 @@ export async function GET(request: NextRequest) {
       {} as Record<string, GroupedWorkout>
     );
 
+    const finalWorkouts = Object.values(groupedWorkouts);
+
     return NextResponse.json({
       success: true,
-      workouts: Object.values(groupedWorkouts),
+      workouts: finalWorkouts,
     });
   } catch (error) {
     console.error('Error fetching workouts:', error);

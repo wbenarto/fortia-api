@@ -1,6 +1,6 @@
 export function getTodayDate(): string {
   const today = new Date();
-  return today.toISOString().split('T')[0]; // YYYY-MM-DD format
+  return today.toLocaleDateString('en-CA'); // YYYY-MM-DD format in local timezone
 }
 
 export function getLocalDate(): Date {
