@@ -1,7 +1,7 @@
-import { neon } from '@neondatabase/serverless';
-import { NextRequest, NextResponse } from 'next/server';
 import { getTodayDate } from '@/lib/dateUtils';
 import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
+import { neon } from '@neondatabase/serverless';
+import { NextRequest, NextResponse } from 'next/server';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     // Get or create today's quest record
     let questRecord = await sql`
-      SELECT * FROM daily_quests 
+      SELECT * FROM daily_quests
       WHERE clerk_id = ${clerkId} AND date = ${date}
     `;
 
@@ -30,13 +30,14 @@ export async function GET(request: NextRequest) {
       const previousDate = previousDay.toISOString().split('T')[0];
 
       const previousQuest = await sql`
-        SELECT day_completed, streak_day FROM daily_quests 
+        SELECT day_completed, streak_day FROM daily_quests
         WHERE clerk_id = ${clerkId} AND date = ${previousDate}
       `;
 
-      const currentStreak = previousQuest.length > 0 && previousQuest[0].day_completed 
-        ? previousQuest[0].streak_day + 1 
-        : 1;
+      const currentStreak =
+        previousQuest.length > 0 && previousQuest[0].day_completed
+          ? previousQuest[0].streak_day + 1
+          : 1;
 
       await sql`
         INSERT INTO daily_quests (clerk_id, date, streak_day)
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
       // Fetch the newly created record
       questRecord = await sql`
-        SELECT * FROM daily_quests 
+        SELECT * FROM daily_quests
         WHERE clerk_id = ${clerkId} AND date = ${date}
       `;
     }
@@ -59,8 +60,8 @@ export async function GET(request: NextRequest) {
         meal_logged: false,
         exercise_logged: false,
         day_completed: false,
-        streak_day: 1
-      }
+        streak_day: 1,
+      },
     });
   } catch (error) {
     return handleDatabaseError(error);
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     // Get or create today's quest record
     let questRecord = await sql`
-      SELECT * FROM daily_quests 
+      SELECT * FROM daily_quests
       WHERE clerk_id = ${clerkId} AND date = ${questDate}
     `;
 
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Update existing quest record
       await sql`
-        UPDATE daily_quests 
+        UPDATE daily_quests
         SET ${questType} = true, updated_at = NOW()
         WHERE clerk_id = ${clerkId} AND date = ${questDate}
       `;
@@ -107,17 +108,18 @@ export async function POST(request: NextRequest) {
 
     // Check if all quests are completed and update day_completed
     const updatedRecord = await sql`
-      SELECT * FROM daily_quests 
+      SELECT * FROM daily_quests
       WHERE clerk_id = ${clerkId} AND date = ${questDate}
     `;
 
     if (updatedRecord.length > 0) {
       const quest = updatedRecord[0];
-      const allCompleted = quest.weight_logged && quest.meal_logged && quest.exercise_logged;
-      
+      const allCompleted =
+        quest.weight_logged && quest.meal_logged && quest.exercise_logged;
+
       if (allCompleted && !quest.day_completed) {
         await sql`
-          UPDATE daily_quests 
+          UPDATE daily_quests
           SET day_completed = true, updated_at = NOW()
           WHERE clerk_id = ${clerkId} AND date = ${questDate}
         `;
@@ -127,7 +129,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `${questType} marked as completed`,
-      data: updatedRecord[0]
+      data: updatedRecord[0],
     });
   } catch (error) {
     return handleDatabaseError(error);
@@ -147,14 +149,14 @@ export async function PUT(request: NextRequest) {
 
     // Update the quest record to mark as completed
     await sql`
-      UPDATE daily_quests 
+      UPDATE daily_quests
       SET day_completed = true, updated_at = NOW()
       WHERE clerk_id = ${clerkId} AND date = ${questDate}
     `;
 
     return NextResponse.json({
       success: true,
-      message: 'Day marked as completed'
+      message: 'Day marked as completed',
     });
   } catch (error) {
     return handleDatabaseError(error);

@@ -1,5 +1,5 @@
 const { neon } = require('@neondatabase/serverless');
-require('dotenv').config();
+require('dotenv').config({ path: '.env.local' });
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -789,6 +789,80 @@ const migrations = [
       // Add comment to document the column
       await sql`COMMENT ON COLUMN users.body_fat_percentage IS 'Calculated body fat percentage using Deurenberg formula (0-50%)'`;
       console.log('Added comment to body_fat_percentage column');
+    },
+  },
+
+  {
+    id: '003_add_ai_workout_program',
+    description:
+      'Add AI workout program tables with historical muscle balance tracking',
+    up: async () => {
+      console.log('Running migration: Add AI workout program tables...');
+      const fs = require('fs');
+      const path = require('path');
+      const migration = fs.readFileSync(
+        path.join(__dirname, '../migrations/003_add_ai_workout_program.sql'),
+        'utf8'
+      );
+      await sql.unsafe(migration);
+      console.log('Migration 003 completed successfully');
+    },
+  },
+
+  {
+    id: '012_fix_workout_sessions_columns',
+    description: 'Fix workout_sessions table columns for AI workout programs',
+    up: async () => {
+      console.log('Running migration: Fix workout_sessions table columns...');
+      const fs = require('fs');
+      const path = require('path');
+      const migration = fs.readFileSync(
+        path.join(
+          __dirname,
+          '../migrations/012_fix_workout_sessions_columns.sql'
+        ),
+        'utf8'
+      );
+      await sql.unsafe(migration);
+      console.log('Migration 012 completed successfully');
+    },
+  },
+
+  {
+    id: '013_update_workout_type_constraint',
+    description: 'Update workout_type constraint to include ai_generated',
+    up: async () => {
+      console.log('Running migration: Update workout_type constraint...');
+      const fs = require('fs');
+      const path = require('path');
+      const migration = fs.readFileSync(
+        path.join(
+          __dirname,
+          '../migrations/013_update_workout_type_constraint.sql'
+        ),
+        'utf8'
+      );
+      await sql.unsafe(migration);
+      console.log('Migration 013 completed successfully');
+    },
+  },
+
+  {
+    id: '014_fix_workout_exercises_columns',
+    description: 'Fix workout_exercises table columns for AI workout programs',
+    up: async () => {
+      console.log('Running migration: Fix workout_exercises table columns...');
+      const fs = require('fs');
+      const path = require('path');
+      const migration = fs.readFileSync(
+        path.join(
+          __dirname,
+          '../migrations/014_fix_workout_exercises_columns.sql'
+        ),
+        'utf8'
+      );
+      await sql.unsafe(migration);
+      console.log('Migration 014 completed successfully');
     },
   },
 ];
