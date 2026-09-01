@@ -1,6 +1,6 @@
-import { calculateBMR, calculateTDEE } from '@/lib/bmrUtils';
 import { calculateBodyFatPercentage } from '@/lib/bodyFatUtils';
 import { getDayBounds, parseLocalDate } from '@/lib/dateUtils';
+import { calculateNutritionTargets } from '@/lib/nutritionTargets';
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -48,34 +48,24 @@ export async function POST(request: NextRequest) {
 
       if (userData.length > 0) {
         const user = userData[0];
-        console.log(user);
-        const newBMR = Math.round(
-          calculateBMR(weight, user.height, user.age, user.gender)
-        );
-        const newTDEE = calculateTDEE(newBMR, user.activity_level);
 
-        // Calculate daily macros based on new TDEE
-        let dailyCalories = 0;
-        let dailyProtein = 0;
-        let dailyCarbs = 0;
-        let dailyFats = 0;
-
-        if (user.fitness_goal == 'lose_weight') {
-          dailyCalories = Math.round(newTDEE * 0.8);
-          dailyProtein = Math.round((dailyCalories * 0.25) / 4); // 25% protein
-          dailyCarbs = Math.round((dailyCalories * 0.45) / 4); // 45% carbs
-          dailyFats = Math.round((dailyCalories * 0.3) / 9); // 30% fats
-        } else if (user.fitness_goal === 'gain_muscle') {
-          dailyCalories = Math.round(newTDEE * 0.9);
-          dailyProtein = Math.round((dailyCalories * 0.4) / 4); // 25% protein
-          dailyCarbs = Math.round((dailyCalories * 0.3) / 4); // 45% carbs
-          dailyFats = Math.round((dailyCalories * 0.3) / 9); // 30% fats
-        } else {
-          dailyCalories = Math.round(newTDEE * 0.9);
-          dailyProtein = Math.round((dailyCalories * 0.25) / 4); // 25% protein
-          dailyCarbs = Math.round((dailyCalories * 0.45) / 4); // 45% carbs
-          dailyFats = Math.round((dailyCalories * 0.3) / 9); // 30% fats
-        }
+        // Recompute BMR / TDEE / calorie + macro targets from the new weight
+        // using the shared single source of truth.
+        const {
+          bmr: newBMR,
+          tdee: newTDEE,
+          dailyCalories,
+          dailyProtein,
+          dailyCarbs,
+          dailyFats,
+        } = calculateNutritionTargets({
+          weight,
+          height: user.height,
+          age: user.age,
+          gender: user.gender,
+          activityLevel: user.activity_level,
+          fitnessGoal: user.fitness_goal,
+        });
 
         // Calculate body fat percentage
         const heightInInches = user.height / 2.54; // Convert cm to inches
