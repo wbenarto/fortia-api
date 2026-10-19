@@ -101,7 +101,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Exercise video fetch error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch exercise video', details: error.message },
+      {
+        error: 'Failed to fetch exercise video',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
@@ -142,7 +145,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Video cache stats error:', error);
     return NextResponse.json(
-      { error: 'Failed to get cache stats', details: error.message },
+      {
+        error: 'Failed to get cache stats',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

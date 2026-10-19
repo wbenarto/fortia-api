@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getGeminiGenerateContentUrl, getGeminiGenerationConfig, extractGeminiResponseText } from '@/lib/gemini';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
   }
 }`;
 
-    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const GEMINI_API_URL = getGeminiGenerateContentUrl(GEMINI_API_KEY);
     console.log('Calling Gemini API...');
 
     // Use retry logic for the Gemini API call
@@ -107,12 +108,12 @@ export async function POST(request: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
+          generationConfig: getGeminiGenerationConfig({
             temperature: 0.1,
             maxOutputTokens: 2000,
             topP: 0.8,
             topK: 40,
-          },
+          }),
         }),
       });
 
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = extractGeminiResponseText(data);
 
     let result;
     try {

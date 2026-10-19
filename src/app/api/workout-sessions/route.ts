@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       SELECT
         ws.id, ws.title, ws.week_number, ws.session_number, ws.phase_name,
         ws.completion_status, ws.scheduled_date, ws.warm_up_video_url,
-        wp.program_name, wp.program_goal, wp.muscle_balance_target
+        wp.program_name, wp.session_duration, wp.program_goal, wp.muscle_balance_target
       FROM workout_sessions ws
       JOIN workout_programs wp ON ws.program_id = wp.id
       WHERE ws.id = ${sessionId} AND ws.clerk_id = ${clerkId}
@@ -53,7 +53,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Get workout session error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch workout session', details: error.message },
+      {
+        error: 'Failed to fetch workout session',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
@@ -124,7 +127,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Complete workout session error:', error);
     return NextResponse.json(
-      { error: 'Failed to complete workout session', details: error.message },
+      {
+        error: 'Failed to complete workout session',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
@@ -174,7 +180,10 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error('Update exercise error:', error);
     return NextResponse.json(
-      { error: 'Failed to update exercise', details: error.message },
+      {
+        error: 'Failed to update exercise',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
@@ -211,7 +220,10 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error('Save completion states error:', error);
     return NextResponse.json(
-      { error: 'Failed to save completion states', details: error.message },
+      {
+        error: 'Failed to save completion states',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

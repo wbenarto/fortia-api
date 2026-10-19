@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     try {
       // Get user's data to calculate new BMR
       const userData = await sql`
-				SELECT height, age, gender, activity_level, fitness_goal
+				SELECT height, age, gender, activity_level, fitness_goal, diet_type
 				FROM users
 				WHERE clerk_id = ${clerkId}
 			`;
@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
           gender: user.gender,
           activityLevel: user.activity_level,
           fitnessGoal: user.fitness_goal,
+          dietType: user.diet_type,
         });
 
         // Calculate body fat percentage

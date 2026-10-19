@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getGeminiGenerateContentUrl, getGeminiGenerationConfig, parseGeminiJsonFromResponse } from '@/lib/gemini';
 
 // Simple in-memory rate limiter for local development
 const rateLimitMap = new Map<string, { count: number; date: string }>();
@@ -98,9 +99,7 @@ Return ONLY a valid JSON object with this exact structure:
 
 Be accurate and realistic with the values. Do not include any text before or after the JSON object.`;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
+      const response = await fetch(getGeminiGenerateContentUrl(GEMINI_API_KEY), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -115,10 +114,10 @@ Be accurate and realistic with the values. Do not include any text before or aft
                 ],
               },
             ],
-            generationConfig: {
+            generationConfig: getGeminiGenerationConfig({
               temperature: 0.3,
               maxOutputTokens: 500,
-            },
+            }),
           }),
         }
       );
@@ -128,20 +127,7 @@ Be accurate and realistic with the values. Do not include any text before or aft
       }
 
       const data = await response.json();
-
-      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-        throw new Error('Invalid response structure from Gemini API');
-      }
-
-      const responseText = data.candidates[0].content.parts[0].text.trim();
-
-      // Try to extract JSON from the response
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-
-      const nutritionData = JSON.parse(jsonMatch[0]);
+      const nutritionData = parseGeminiJsonFromResponse(data);
 
       // Validate the response structure
       const requiredFields = [

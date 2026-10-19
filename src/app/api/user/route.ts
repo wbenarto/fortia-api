@@ -2,6 +2,8 @@ import { checkUserAuthStatus } from '@/lib/authUtils';
 import { calculateBodyFatPercentage } from '@/lib/bodyFatUtils';
 import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
 import {
+  DIET_TYPES,
+  FASTING_SCHEDULES,
   calculateNutritionTargets,
   recalculateNutritionTargets,
 } from '@/lib/nutritionTargets';
@@ -262,10 +264,37 @@ export async function PUT(request: NextRequest) {
       customProtein,
       customCarbs,
       customFats,
+      dietType,
+      fastingSchedule,
+      fastingStartHour,
     } = await request.json();
 
     if (!clerkId) {
       return ErrorResponses.badRequest('Clerk ID is required');
+    }
+
+    if (dietType != null && !(DIET_TYPES as string[]).includes(dietType)) {
+      return ErrorResponses.badRequest(`Invalid diet type: ${dietType}`);
+    }
+    if (
+      fastingSchedule != null &&
+      !(FASTING_SCHEDULES as string[]).includes(fastingSchedule)
+    ) {
+      return ErrorResponses.badRequest(
+        `Invalid fasting schedule: ${fastingSchedule}`
+      );
+    }
+    if (
+      fastingStartHour != null &&
+      !(
+        Number.isInteger(fastingStartHour) &&
+        fastingStartHour >= 0 &&
+        fastingStartHour <= 23
+      )
+    ) {
+      return ErrorResponses.badRequest(
+        'Fasting start hour must be an integer from 0 to 23'
+      );
     }
 
     // Only run the full onboarding validation when the payload actually looks
@@ -309,7 +338,13 @@ export async function PUT(request: NextRequest) {
     // If any input that feeds BMR / TDEE / calorie targets changed, recompute
     // and store the derived values. Otherwise leave the stored values as-is.
     const profileInputsChanged = Boolean(
-      weight || height || age || gender || activityLevel || fitnessGoal
+      weight ||
+        height ||
+        age ||
+        gender ||
+        activityLevel ||
+        fitnessGoal ||
+        dietType
     );
 
     const targets = profileInputsChanged
@@ -320,6 +355,7 @@ export async function PUT(request: NextRequest) {
           gender,
           activityLevel,
           fitnessGoal,
+          dietType,
         })
       : null;
 
@@ -348,6 +384,9 @@ export async function PUT(request: NextRequest) {
         custom_protein = COALESCE(${customProtein}, custom_protein),
         custom_carbs = COALESCE(${customCarbs}, custom_carbs),
         custom_fats = COALESCE(${customFats}, custom_fats),
+        diet_type = COALESCE(${dietType ?? null}, diet_type),
+        fasting_schedule = COALESCE(${fastingSchedule ?? null}, fasting_schedule),
+        fasting_start_hour = COALESCE(${fastingStartHour ?? null}, fasting_start_hour),
         updated_at = NOW()
       WHERE clerk_id = ${clerkId}
       RETURNING *

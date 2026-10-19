@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { getGeminiGenerateContentUrl, getGeminiGenerationConfig, extractGeminiResponseText } from '@/lib/gemini';
 
 // Load environment variables
 dotenv.config();
@@ -72,15 +73,13 @@ Return JSON only:
 						],
 					},
 				],
-				generationConfig: {
+				generationConfig: getGeminiGenerationConfig({
 					temperature: 0.3,
 					maxOutputTokens: 500,
-				},
+				}),
 			};
 
-			const response = await fetch(
-				`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-				{
+			const response = await fetch(getGeminiGenerateContentUrl(GEMINI_API_KEY), {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
@@ -110,11 +109,7 @@ Return JSON only:
 			}
 
 			const data = await response.json();
-			const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-			if (!content) {
-				throw new Error('No response from Gemini');
-			}
+			const content = extractGeminiResponseText(data);
 
 			console.log('Raw Gemini response content:', content);
 

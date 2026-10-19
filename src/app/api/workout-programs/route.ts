@@ -1,8 +1,20 @@
-import { getTodayDate } from '@/lib/dateUtils';
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
 
 const sql = neon(process.env.DATABASE_URL!);
+
+const UPDATABLE_PROGRAM_COLUMNS = new Set([
+  'program_name',
+  'program_goal',
+  'total_weeks',
+  'sessions_per_week',
+  'session_duration',
+  'workout_days',
+  'available_equipment',
+  'muscle_balance_target',
+  'status',
+  'start_date',
+]);
 
 // Get user's workout programs
 export async function GET(request: NextRequest) {
@@ -52,10 +64,7 @@ export async function GET(request: NextRequest) {
             ws.warm_up_video_url
           FROM workout_sessions ws
           WHERE ws.program_id = ${program.id}
-            AND ws.scheduled_date >= ${getTodayDate()}
-            AND ws.week_number <= ${Math.min(currentWeek + 1, program.total_weeks)}
-          ORDER BY ws.scheduled_date, ws.session_number
-          LIMIT 10
+          ORDER BY ws.week_number, ws.session_number
         `;
 
         return {
@@ -73,7 +82,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Get workout programs error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch workout programs', details: error.message },
+      {
+        error: 'Failed to fetch workout programs',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
@@ -118,7 +130,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Create workout program error:', error);
     return NextResponse.json(
-      { error: 'Failed to create workout program', details: error.message },
+      {
+        error: 'Failed to create workout program',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
@@ -136,12 +151,13 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Build dynamic update query
-    const updateFields = [];
-    const updateValues = [];
+    // Build dynamic update query. Column names come from the request body, so
+    // only allow known editable columns — never interpolate arbitrary keys.
+    const updateFields: string[] = [];
+    const updateValues: unknown[] = [];
 
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value !== undefined) {
+    Object.entries(updates ?? {}).forEach(([key, value]) => {
+      if (value !== undefined && UPDATABLE_PROGRAM_COLUMNS.has(key)) {
         updateFields.push(`${key} = $${updateFields.length + 1}`);
         updateValues.push(value);
       }
@@ -163,7 +179,7 @@ export async function PUT(request: NextRequest) {
       RETURNING id, program_name, updated_at
     `;
 
-    const [updatedProgram] = await sql(query, updateValues);
+    const [updatedProgram] = await sql.query(query, updateValues);
 
     if (!updatedProgram) {
       return NextResponse.json(
@@ -179,7 +195,10 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error('Update workout program error:', error);
     return NextResponse.json(
-      { error: 'Failed to update workout program', details: error.message },
+      {
+        error: 'Failed to update workout program',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
@@ -199,30 +218,50 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Soft delete by updating status
-    const [deletedProgram] = await sql`
-      UPDATE workout_programs
-      SET status = 'deleted', updated_at = NOW()
+    // First verify the program exists and belongs to the user
+    const [programCheck] = await sql`
+      SELECT id, program_name FROM workout_programs
       WHERE id = ${programId} AND clerk_id = ${clerkId}
-      RETURNING id, program_name
     `;
 
-    if (!deletedProgram) {
+    if (!programCheck) {
       return NextResponse.json(
         { error: 'Program not found or access denied' },
         { status: 404 }
       );
     }
 
+    // Delete AI workout decisions associated with this program
+    await sql`
+      DELETE FROM ai_workout_decisions
+      WHERE program_id = ${programId} AND clerk_id = ${clerkId}
+    `;
+
+    // Delete all workout sessions associated with this program
+    // This will cascade delete all exercises due to ON DELETE CASCADE
+    await sql`
+      DELETE FROM workout_sessions
+      WHERE program_id = ${programId} AND clerk_id = ${clerkId}
+    `;
+
+    // Delete the workout program itself
+    await sql`
+      DELETE FROM workout_programs
+      WHERE id = ${programId} AND clerk_id = ${clerkId}
+    `;
+
     return NextResponse.json({
       success: true,
-      message: 'Program deleted successfully',
-      data: deletedProgram,
+      message: 'Program and all associated sessions deleted successfully',
+      data: { id: programCheck.id, program_name: programCheck.program_name },
     });
   } catch (error) {
     console.error('Delete workout program error:', error);
     return NextResponse.json(
-      { error: 'Failed to delete workout program', details: error.message },
+      {
+        error: 'Failed to delete workout program',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
