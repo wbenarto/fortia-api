@@ -1,6 +1,12 @@
 import { checkUserAuthStatus } from '@/lib/authUtils';
 import { calculateBodyFatPercentage } from '@/lib/bodyFatUtils';
 import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
+import {
+  DIET_TYPES,
+  FASTING_SCHEDULES,
+  calculateNutritionTargets,
+  recalculateNutritionTargets,
+} from '@/lib/nutritionTargets';
 import { validateOnboardingData } from '@/lib/userUtils';
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
@@ -54,12 +60,6 @@ export async function POST(request: NextRequest) {
       gender,
       activityLevel,
       fitnessGoal,
-      dailyCalories,
-      dailyProtein,
-      dailyCarbs,
-      dailyFats,
-      bmr,
-      tdee,
       bodyFatPercentage,
     } = await request.json();
 
@@ -94,6 +94,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Recompute BMR / TDEE / calorie + macro targets server-side. The stored
+    // daily_* values are always derived here so they can never drift from the
+    // profile; any client-supplied daily_* / bmr / tdee are ignored.
+    const targets = calculateNutritionTargets({
+      weight,
+      height,
+      age,
+      gender,
+      activityLevel,
+      fitnessGoal,
+    });
+
     // First check if user already exists
     const existingUser = await sql`
 			SELECT * FROM users WHERE email = ${email} OR clerk_id = ${clerkId}
@@ -113,12 +125,12 @@ export async function POST(request: NextRequest) {
           gender = ${gender},
           activity_level = ${activityLevel},
           fitness_goal = ${fitnessGoal},
-          daily_calories = ${dailyCalories},
-          daily_protein = ${dailyProtein},
-          daily_carbs = ${dailyCarbs},
-          daily_fats = ${dailyFats},
-          bmr = ${bmr},
-          tdee = ${tdee},
+          daily_calories = ${targets.dailyCalories},
+          daily_protein = ${targets.dailyProtein},
+          daily_carbs = ${targets.dailyCarbs},
+          daily_fats = ${targets.dailyFats},
+          bmr = ${targets.bmr},
+          tdee = ${targets.tdee},
           body_fat_percentage = ${bodyFatPercentage},
           updated_at = NOW()
         WHERE clerk_id = ${clerkId}
@@ -176,12 +188,12 @@ export async function POST(request: NextRequest) {
         ${gender},
         ${activityLevel},
         ${fitnessGoal},
-        ${dailyCalories},
-        ${dailyProtein},
-        ${dailyCarbs},
-        ${dailyFats},
-        ${bmr},
-        ${tdee},
+        ${targets.dailyCalories},
+        ${targets.dailyProtein},
+        ${targets.dailyCarbs},
+        ${targets.dailyFats},
+        ${targets.bmr},
+        ${targets.tdee},
         ${bodyFatPercentage},
         NOW(),
         NOW()
@@ -248,43 +260,73 @@ export async function PUT(request: NextRequest) {
       gender,
       activityLevel,
       fitnessGoal,
-      dailyCalories,
-      dailyProtein,
-      dailyCarbs,
-      dailyFats,
-      bmr,
-      tdee,
       customCalories,
       customProtein,
       customCarbs,
       customFats,
+      dietType,
+      fastingSchedule,
+      fastingStartHour,
     } = await request.json();
 
     if (!clerkId) {
       return ErrorResponses.badRequest('Clerk ID is required');
     }
 
-    // Validate onboarding data
-    const validation = validateOnboardingData({
-      clerkId,
-      dob,
-      age,
-      weight,
-      height,
-      gender,
-      fitnessGoal,
-      targetWeight,
-    });
-
-    if (!validation.isValid) {
+    if (dietType != null && !(DIET_TYPES as string[]).includes(dietType)) {
+      return ErrorResponses.badRequest(`Invalid diet type: ${dietType}`);
+    }
+    if (
+      fastingSchedule != null &&
+      !(FASTING_SCHEDULES as string[]).includes(fastingSchedule)
+    ) {
       return ErrorResponses.badRequest(
-        `Validation failed: ${validation.errors.join(', ')}`
+        `Invalid fasting schedule: ${fastingSchedule}`
+      );
+    }
+    if (
+      fastingStartHour != null &&
+      !(
+        Number.isInteger(fastingStartHour) &&
+        fastingStartHour >= 0 &&
+        fastingStartHour <= 23
+      )
+    ) {
+      return ErrorResponses.badRequest(
+        'Fasting start hour must be an integer from 0 to 23'
       );
     }
 
-    // First check if user exists
+    // Only run the full onboarding validation when the payload actually looks
+    // like a complete profile submission. Screens such as Edit Profile send
+    // partial updates (e.g. just name / dob / height) and must be allowed.
+    const isFullProfilePayload = Boolean(
+      weight && height && gender && fitnessGoal && targetWeight
+    );
+
+    if (isFullProfilePayload) {
+      const validation = validateOnboardingData({
+        clerkId,
+        dob,
+        age,
+        weight,
+        height,
+        gender,
+        fitnessGoal,
+        targetWeight,
+      });
+
+      if (!validation.isValid) {
+        return ErrorResponses.badRequest(
+          `Validation failed: ${validation.errors.join(', ')}`
+        );
+      }
+    }
+
+    // First check if user exists (and load the current row so we can recompute
+    // nutrition targets from the merged profile)
     const existingUser = await sql`
-			SELECT id FROM users WHERE clerk_id = ${clerkId}
+			SELECT * FROM users WHERE clerk_id = ${clerkId}
 		`;
 
     if (existingUser.length === 0) {
@@ -292,6 +334,30 @@ export async function PUT(request: NextRequest) {
         'User not found. Please complete sign-up first.'
       );
     }
+
+    // If any input that feeds BMR / TDEE / calorie targets changed, recompute
+    // and store the derived values. Otherwise leave the stored values as-is.
+    const profileInputsChanged = Boolean(
+      weight ||
+        height ||
+        age ||
+        gender ||
+        activityLevel ||
+        fitnessGoal ||
+        dietType
+    );
+
+    const targets = profileInputsChanged
+      ? recalculateNutritionTargets(existingUser[0], {
+          weight,
+          height,
+          age,
+          gender,
+          activityLevel,
+          fitnessGoal,
+          dietType,
+        })
+      : null;
 
     // Update user with onboarding information
     const result = await sql`
@@ -308,16 +374,19 @@ export async function PUT(request: NextRequest) {
         gender = COALESCE(${gender}, gender),
         activity_level = COALESCE(${activityLevel}, activity_level),
         fitness_goal = COALESCE(${fitnessGoal}, fitness_goal),
-        daily_calories = COALESCE(${dailyCalories}, daily_calories),
-        daily_protein = COALESCE(${dailyProtein}, daily_protein),
-        daily_carbs = COALESCE(${dailyCarbs}, daily_carbs),
-        daily_fats = COALESCE(${dailyFats}, daily_fats),
-        bmr = COALESCE(${bmr}, bmr),
-        tdee = COALESCE(${tdee}, tdee),
+        daily_calories = COALESCE(${targets?.dailyCalories ?? null}, daily_calories),
+        daily_protein = COALESCE(${targets?.dailyProtein ?? null}, daily_protein),
+        daily_carbs = COALESCE(${targets?.dailyCarbs ?? null}, daily_carbs),
+        daily_fats = COALESCE(${targets?.dailyFats ?? null}, daily_fats),
+        bmr = COALESCE(${targets?.bmr ?? null}, bmr),
+        tdee = COALESCE(${targets?.tdee ?? null}, tdee),
         custom_calories = COALESCE(${customCalories}, custom_calories),
         custom_protein = COALESCE(${customProtein}, custom_protein),
         custom_carbs = COALESCE(${customCarbs}, custom_carbs),
         custom_fats = COALESCE(${customFats}, custom_fats),
+        diet_type = COALESCE(${dietType ?? null}, diet_type),
+        fasting_schedule = COALESCE(${fastingSchedule ?? null}, fasting_schedule),
+        fasting_start_hour = COALESCE(${fastingStartHour ?? null}, fasting_start_hour),
         updated_at = NOW()
       WHERE clerk_id = ${clerkId}
       RETURNING *

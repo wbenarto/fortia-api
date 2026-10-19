@@ -17,6 +17,37 @@ export async function GET(request: NextRequest) {
       return ErrorResponses.badRequest('Clerk ID is required');
     }
 
+    if (searchParams.get('recent') === 'true') {
+      const query = searchParams.get('q')?.trim();
+      if (query) {
+        const pattern = `%${query.toLowerCase().replace(/[\\%_]/g, '\\$&')}%`;
+        const matches = await sql`
+          SELECT * FROM (
+            SELECT DISTINCT ON (LOWER(food_name)) *
+            FROM meals
+            WHERE clerk_id = ${clerkId}
+            AND LOWER(food_name) LIKE ${pattern}
+            ORDER BY LOWER(food_name), created_at DESC
+          ) latest
+          ORDER BY created_at DESC
+          LIMIT 5
+        `;
+        return NextResponse.json({ success: true, data: matches });
+      }
+
+      const recentMeals = await sql`
+        SELECT * FROM (
+          SELECT DISTINCT ON (LOWER(food_name)) *
+          FROM meals
+          WHERE clerk_id = ${clerkId}
+          ORDER BY LOWER(food_name), created_at DESC
+        ) latest
+        ORDER BY created_at DESC
+        LIMIT 10
+      `;
+      return NextResponse.json({ success: true, data: recentMeals });
+    }
+
     // Get day bounds for proper timezone handling
     const { start, end } = getDayBounds(date);
 

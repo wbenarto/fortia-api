@@ -1,4 +1,9 @@
 import { fetchUserProfile } from '@/lib/userUtils';
+import {
+  getGeminiGenerateContentUrl,
+  getGeminiGenerationConfig,
+  parseGeminiJsonFromResponse,
+} from '@/lib/gemini';
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -22,22 +27,19 @@ async function callGeminiAPI(prompt: string) {
         ],
       },
     ],
-    generationConfig: {
+    generationConfig: getGeminiGenerationConfig({
       temperature: 0.3,
       maxOutputTokens: 8192,
-    },
+    }),
   };
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(geminiRequestBody),
-    }
-  );
+  const response = await fetch(getGeminiGenerateContentUrl(GEMINI_API_KEY), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(geminiRequestBody),
+  });
 
   if (!response.ok) {
     throw new Error(
@@ -47,20 +49,8 @@ async function callGeminiAPI(prompt: string) {
 
   const data = await response.json();
 
-  if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-    throw new Error('Invalid response structure from Gemini API');
-  }
-
-  const responseText = data.candidates[0].content.parts[0].text.trim();
-
-  // Try to extract JSON from the response
-  const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error('No JSON found in response');
-  }
-
   try {
-    return JSON.parse(jsonMatch[0]);
+    return parseGeminiJsonFromResponse(data);
   } catch (parseError) {
     throw new Error(`Failed to parse JSON: ${parseError}`);
   }
@@ -453,7 +443,10 @@ Be accurate and realistic with the values. Do not include any text before or aft
     });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Failed to generate workout program', details: error.message },
+      {
+        error: 'Failed to generate workout program',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
