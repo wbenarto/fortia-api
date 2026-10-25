@@ -31,6 +31,13 @@ export async function DELETE(request: NextRequest) {
 			WHERE clerk_id = ${clerkId}
 		`;
 
+    // Built workouts (reference activities, so remove them first)
+    console.log('Deleting built workouts...');
+    await sql`
+			DELETE FROM user_workouts
+			WHERE clerk_id = ${clerkId}
+		`;
+
     // 3. Delete activities
     console.log('Deleting activities...');
     await sql`
