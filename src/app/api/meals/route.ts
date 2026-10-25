@@ -5,6 +5,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const sql = neon(process.env.DATABASE_URL!);
 
+// One "recent" entry per meal + amounts, so the same meal logged at different
+// portions shows up separately and people can pick by amount. Constant SQL —
+// no user input is interpolated here.
+const RECENT_MEAL_KEY = sql.unsafe(
+  "LOWER(food_name), LOWER(COALESCE(portion_size, '')), COALESCE(ingredients::text, '')"
+);
+
 // GET - Get user's meals for a specific date
 export async function GET(request: NextRequest) {
   try {
@@ -23,11 +30,11 @@ export async function GET(request: NextRequest) {
         const pattern = `%${query.toLowerCase().replace(/[\\%_]/g, '\\$&')}%`;
         const matches = await sql`
           SELECT * FROM (
-            SELECT DISTINCT ON (LOWER(food_name)) *
+            SELECT DISTINCT ON (${RECENT_MEAL_KEY}) *
             FROM meals
             WHERE clerk_id = ${clerkId}
             AND LOWER(food_name) LIKE ${pattern}
-            ORDER BY LOWER(food_name), created_at DESC
+            ORDER BY ${RECENT_MEAL_KEY}, created_at DESC
           ) latest
           ORDER BY created_at DESC
           LIMIT 5
@@ -37,10 +44,10 @@ export async function GET(request: NextRequest) {
 
       const recentMeals = await sql`
         SELECT * FROM (
-          SELECT DISTINCT ON (LOWER(food_name)) *
+          SELECT DISTINCT ON (${RECENT_MEAL_KEY}) *
           FROM meals
           WHERE clerk_id = ${clerkId}
-          ORDER BY LOWER(food_name), created_at DESC
+          ORDER BY ${RECENT_MEAL_KEY}, created_at DESC
         ) latest
         ORDER BY created_at DESC
         LIMIT 10

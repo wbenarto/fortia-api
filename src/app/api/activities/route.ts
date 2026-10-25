@@ -1,3 +1,4 @@
+import { insertActivity } from '@/lib/activities';
 import { getDayBounds, getTodayDate, parseLocalDate } from '@/lib/dateUtils';
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,66 +16,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use provided date or fallback to today's date
-    const activityDate = date || getTodayDate();
-
-    // Create a timezone-aware timestamp for the activity (like meals)
-    const localDate = parseLocalDate(activityDate);
-    localDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone edge cases
-    const activityTimestamp = localDate.toISOString();
-
-    // Insert the activity into the database with timezone-aware timestamp
-    const result = await sql`
-			INSERT INTO activities (clerk_id, activity_description, estimated_calories, date, created_at)
-			VALUES (${clerkId}, ${activityDescription}, ${estimatedCalories || null}, ${activityDate}, ${activityTimestamp})
-			RETURNING id, activity_description, estimated_calories, date, created_at
-		`;
-
-    // Update daily quest for exercise logging ONLY for actual exercises (not BMR or Steps)
-    // Check if this is an actual exercise by excluding BMR and Steps activities
-    const isActualExercise =
-      !activityDescription.toLowerCase().includes('basal metabolic rate') &&
-      !activityDescription.toLowerCase().includes('daily steps');
-
-    if (isActualExercise) {
-      try {
-        await sql`
-          INSERT INTO daily_quests (clerk_id, date, exercise_logged)
-          VALUES (${clerkId}, ${activityDate}, true)
-          ON CONFLICT (clerk_id, date)
-          DO UPDATE SET exercise_logged = true, updated_at = NOW()
-        `;
-
-        // Check if all quests are completed and update day_completed
-        const questStatus = await sql`
-          SELECT weight_logged, meal_logged, exercise_logged, day_completed
-          FROM daily_quests
-          WHERE clerk_id = ${clerkId} AND date = ${activityDate}
-        `;
-
-        if (questStatus.length > 0) {
-          const quest = questStatus[0];
-          const allCompleted =
-            quest.weight_logged && quest.meal_logged && quest.exercise_logged;
-
-          if (allCompleted && !quest.day_completed) {
-            await sql`
-              UPDATE daily_quests
-              SET day_completed = true, updated_at = NOW()
-              WHERE clerk_id = ${clerkId} AND date = ${activityDate}
-            `;
-          }
-        }
-      } catch (questError) {
-        console.error('Failed to update daily quest:', questError);
-        // Don't fail the activity logging if quest update fails
-      }
-    }
+    const activity = await insertActivity({
+      clerkId,
+      description: activityDescription,
+      calories: estimatedCalories,
+      date,
+    });
 
     return NextResponse.json(
       {
         success: true,
-        data: result[0],
+        data: activity,
         message: 'Activity logged successfully',
       },
       { status: 201 }
@@ -279,21 +231,26 @@ export async function GET(request: NextRequest) {
       // Use timezone-aware date bounds for accurate retrieval (like meals)
       const { start, end } = getDayBounds(date);
 
+      // workout_id / workout_minutes link rows back to the built workout that logged them
       const response = await sql`
-				SELECT id, activity_description, estimated_calories, date, created_at
-				FROM activities
-				WHERE clerk_id = ${clerkId}
-				AND created_at >= ${start.toISOString()}
-				AND created_at < ${end.toISOString()}
-				ORDER BY created_at DESC
+				SELECT a.id, a.activity_description, a.estimated_calories, a.date, a.created_at,
+				       uw.id AS workout_id, uw.active_minutes AS workout_minutes
+				FROM activities a
+				LEFT JOIN user_workouts uw ON uw.activity_id = a.id
+				WHERE a.clerk_id = ${clerkId}
+				AND a.created_at >= ${start.toISOString()}
+				AND a.created_at < ${end.toISOString()}
+				ORDER BY a.created_at DESC
 			`;
       return NextResponse.json({ success: true, data: response });
     } else {
       const response = await sql`
-				SELECT id, activity_description, estimated_calories, date, created_at
-				FROM activities
-				WHERE clerk_id = ${clerkId}
-				ORDER BY created_at DESC
+				SELECT a.id, a.activity_description, a.estimated_calories, a.date, a.created_at,
+				       uw.id AS workout_id, uw.active_minutes AS workout_minutes
+				FROM activities a
+				LEFT JOIN user_workouts uw ON uw.activity_id = a.id
+				WHERE a.clerk_id = ${clerkId}
+				ORDER BY a.created_at DESC
 			`;
       return NextResponse.json({ success: true, data: response });
     }
