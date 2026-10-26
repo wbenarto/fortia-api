@@ -67,7 +67,53 @@ export interface Session {
   kind: 'strength' | 'cardio' | 'mobility' | 'other';
   minutes: number;
   areaSets: Partial<Record<Area, number>>;
+  // exercise_library muscle → sets (secondary muscles count half; cardio counts as
+  // light "set equivalents"). Used by the muscle heat map.
+  muscleSets: Record<string, number>;
 }
+
+interface Muscles {
+  primary: string[];
+  secondary: string[];
+}
+
+// Muscles a logged activity mostly works, by activity_types slug
+const ACTIVITY_MUSCLES: Record<string, string[]> = {
+  running: ['quadriceps', 'hamstrings', 'calves', 'glutes'],
+  walking: ['quadriceps', 'calves', 'glutes'],
+  hiking: ['quadriceps', 'glutes', 'calves', 'hamstrings'],
+  cycling: ['quadriceps', 'glutes', 'calves'],
+  stationary_bike: ['quadriceps', 'glutes', 'calves'],
+  stairs: ['quadriceps', 'glutes', 'calves'],
+  elliptical: ['quadriceps', 'glutes', 'hamstrings'],
+  jump_rope: ['calves', 'quadriceps', 'shoulders'],
+  swimming: ['lats', 'shoulders', 'triceps', 'chest'],
+  rowing: ['lats', 'middle back', 'biceps', 'quadriceps'],
+  climbing: ['lats', 'forearms', 'biceps', 'middle back'],
+  boxing: ['shoulders', 'triceps', 'abdominals'],
+  martial_arts: ['shoulders', 'abdominals', 'quadriceps'],
+  pilates: ['abdominals', 'lower back', 'glutes'],
+  yoga: ['abdominals', 'hamstrings', 'shoulders'],
+  dancing: ['quadriceps', 'calves', 'glutes'],
+  basketball: ['quadriceps', 'calves'],
+  soccer: ['quadriceps', 'hamstrings', 'calves'],
+  tennis: ['shoulders', 'forearms', 'quadriceps'],
+  pickleball: ['shoulders', 'forearms', 'quadriceps'],
+  volleyball: ['shoulders', 'quadriceps', 'calves'],
+};
+// Cardio is a lighter stimulus than lifting: one set-equivalent per 15 minutes, max 4
+const activitySets = (minutes: number) =>
+  Math.min(4, Math.max(1, Math.round(minutes / 15)));
+
+const addMuscles = (
+  target: Record<string, number>,
+  muscles: Muscles | undefined,
+  sets: number
+) => {
+  for (const m of muscles?.primary || []) target[m] = (target[m] || 0) + sets;
+  for (const m of muscles?.secondary || [])
+    target[m] = (target[m] || 0) + sets / 2;
+};
 
 interface Prefs {
   duration: number | null;
@@ -111,6 +157,11 @@ const musclesToAreas = (muscles: string[]): Area[] => [
   ),
 ];
 
+const activityMuscleSets = (slug: string, minutes: number) => {
+  const sets = activitySets(minutes);
+  return Object.fromEntries((ACTIVITY_MUSCLES[slug] || []).map(m => [m, sets]));
+};
+
 // Every training session between `since` and `until` (inclusive dates), from finished
 // builder workouts, logged exercises and logged activities. Shared with Progress.
 export async function loadSessions(
@@ -147,7 +198,7 @@ export async function loadSessions(
         AND a.activity_description NOT ILIKE '%basal metabolic rate%'
         AND a.activity_description NOT ILIKE '%daily steps%'
     `,
-    sql`SELECT name, category FROM activity_types WHERE is_active`,
+    sql`SELECT slug, name, category FROM activity_types WHERE is_active`,
   ]);
 
   // Library muscles for every slug used in finished builder workouts
@@ -160,19 +211,28 @@ export async function loadSessions(
       )
     ),
   ];
-  const slugMuscles = new Map<string, string[]>();
+  const slugMuscles = new Map<string, Muscles>();
   if (slugs.length) {
     const rows = (await sql.query(
-      'SELECT slug, primary_muscles FROM exercise_library WHERE slug = ANY($1::text[])',
+      'SELECT slug, primary_muscles, secondary_muscles FROM exercise_library WHERE slug = ANY($1::text[])',
       [slugs]
-    )) as { slug: string; primary_muscles: string[] }[];
-    rows.forEach(r => slugMuscles.set(r.slug, r.primary_muscles));
+    )) as {
+      slug: string;
+      primary_muscles: string[];
+      secondary_muscles: string[];
+    }[];
+    rows.forEach(r =>
+      slugMuscles.set(r.slug, {
+        primary: r.primary_muscles,
+        secondary: r.secondary_muscles,
+      })
+    );
   }
 
   const typeFor = (name: string) => {
     const lower = name.toLowerCase();
-    return (types as { name: string; category: string }[]).find(t =>
-      lower.startsWith(t.name.toLowerCase())
+    return (types as { slug: string; name: string; category: string }[]).find(
+      t => lower.startsWith(t.name.toLowerCase())
     );
   };
 
@@ -188,7 +248,7 @@ export async function loadSessions(
         .filter(n => n.length >= 3 && !typeFor(n))
     ),
   ];
-  const nameMuscles = new Map<string, string[]>();
+  const nameMuscles = new Map<string, Muscles>();
   // Every word must appear in the library name, plurals ignored ("bicep curls" →
   // "Dumbbell Bicep Curl"); shortest match wins.
   await Promise.all(
@@ -198,12 +258,16 @@ export async function loadSessions(
         .filter(Boolean)
         .map(w => `%${w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w}%`);
       const [row] = (await sql.query(
-        `SELECT primary_muscles FROM exercise_library
+        `SELECT primary_muscles, secondary_muscles FROM exercise_library
          WHERE name ILIKE ALL($1::text[])
          ORDER BY length(name) LIMIT 1`,
         [patterns]
-      )) as { primary_muscles: string[] }[];
-      if (row) nameMuscles.set(name, row.primary_muscles);
+      )) as { primary_muscles: string[]; secondary_muscles: string[] }[];
+      if (row)
+        nameMuscles.set(name, {
+          primary: row.primary_muscles,
+          secondary: row.secondary_muscles,
+        });
     })
   );
 
@@ -212,11 +276,14 @@ export async function loadSessions(
   for (const w of built) {
     const inputs = w.inputs as BuilderInputs;
     const areaSets: Partial<Record<Area, number>> = {};
+    const muscleSets: Record<string, number> = {};
     for (const b of w.blocks as WorkoutBlock[]) {
       if (b.section !== 'main') continue;
-      for (const area of musclesToAreas(slugMuscles.get(b.slug) || [])) {
+      const muscles = slugMuscles.get(b.slug);
+      for (const area of musclesToAreas(muscles?.primary || [])) {
         areaSets[area] = (areaSets[area] || 0) + b.sets;
       }
+      addMuscles(muscleSets, muscles, b.sets);
     }
     sessions.push({
       at: new Date(w.completed_at).getTime(),
@@ -229,6 +296,7 @@ export async function loadSessions(
             : 'strength',
       minutes: Number(w.active_minutes) || inputs.duration,
       areaSets,
+      muscleSets,
     });
   }
 
@@ -248,19 +316,23 @@ export async function loadSessions(
               : 'cardio',
         minutes: minutes ?? 30,
         areaSets: {},
+        muscleSets: activityMuscleSets(type.slug, minutes ?? 30),
       });
       continue;
     }
     const muscles = nameMuscles.get(name.toLowerCase());
     const areaSets: Partial<Record<Area, number>> = {};
-    for (const area of musclesToAreas(muscles || []))
+    for (const area of musclesToAreas(muscles?.primary || []))
       areaSets[area] = parseSets(r.duration);
+    const muscleSets: Record<string, number> = {};
+    addMuscles(muscleSets, muscles, parseSets(r.duration));
     sessions.push({
       at: new Date(r.created_at).getTime(),
       day: r.day,
       kind: muscles ? 'strength' : 'other',
       minutes: minutes ?? 0,
       areaSets,
+      muscleSets,
     });
   }
 
@@ -278,6 +350,12 @@ export async function loadSessions(
       // Older activity rows have no duration; assume a typical half hour
       minutes: parseMinutes(a.activity_description) ?? 30,
       areaSets: {},
+      muscleSets: type
+        ? activityMuscleSets(
+            type.slug,
+            parseMinutes(a.activity_description) ?? 30
+          )
+        : {},
     });
   }
 
