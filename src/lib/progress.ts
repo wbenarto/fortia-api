@@ -85,7 +85,13 @@ export interface Insight {
 
 // --- Loading ---------------------------------------------------------------------------
 
-export async function loadProgress(clerkId: string, from: string, to: string) {
+// `today` is the user's local date (sent by the app); defaults to `to`, the usual case.
+export async function loadProgress(
+  clerkId: string,
+  from: string,
+  to: string,
+  today: string = to
+) {
   const streakFrom = addDays(to, -STREAK_LOOKBACK_DAYS);
 
   const [
@@ -231,11 +237,11 @@ export async function loadProgress(clerkId: string, from: string, to: string) {
           activityMap.has(date) ||
           exerciseMap.has(date),
       },
-      // The last day is usually today and still in progress: don't call it "under" yet
+      // Today is still in progress: don't call it "under" yet
       calorieStatus:
         !meal || !calories || ratio == null
           ? null
-          : date === to && ratio < 1 - CALORIE_TOLERANCE
+          : date === today && ratio < 1 - CALORIE_TOLERANCE
             ? null
             : ratio < 1 - CALORIE_TOLERANCE
               ? 'under'
@@ -260,7 +266,7 @@ export async function loadProgress(clerkId: string, from: string, to: string) {
     days,
     targets,
     summary,
-    insights: buildInsights(days, targets, summary),
+    insights: buildInsights(days, targets, summary, today),
   };
 }
 
@@ -277,7 +283,9 @@ function summarize(
   lastWeighIn: string | null,
   profileWeight: number | undefined
 ) {
-  const weeks = days.length / 7;
+  // A part week (the app's Week view is Sunday → today) counts as one week, so
+  // "per week" figures are what actually happened instead of being scaled up
+  const weeks = Math.max(1, days.length / 7);
 
   // Nutrition
   // Days judged against the target (today counts once it's on/over target)
@@ -447,10 +455,66 @@ function summarize(
 
 type Summary = ReturnType<typeof summarize>;
 
+const WEEKDAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+const weekdayName = (d: string, short = false) => {
+  const name = WEEKDAY_NAMES[new Date(toUTC(d)).getUTCDay()];
+  return short ? name.slice(0, 3) : name;
+};
+const listNames = (names: string[]) =>
+  names.length === 1
+    ? names[0]
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+// Week view: past days with nothing logged (or no meals) — a nudge to fill them in
+function missedDaysInsight(
+  days: ProgressDay[],
+  today: string
+): (Insight & { priority: number }) | null {
+  if (days.length > 7) return null;
+  const past = days.filter(d => d.date < today);
+  const missed = past.filter(
+    d => !d.logged.meal && !d.logged.weight && !d.logged.exercise
+  );
+  if (missed.length) {
+    const names = missed.map(d => weekdayName(d.date, missed.length > 2));
+    return {
+      id: 'missed-days',
+      tone: 'attention',
+      icon: 'calendar-clear-outline',
+      text:
+        missed.length === 1
+          ? `Nothing logged on ${names[0]} — add it if you remember, and keep today on track.`
+          : `Nothing logged on ${listNames(names)} — ${missed.length} days missed.`,
+      priority: 90,
+    };
+  }
+  const noMeals = past.filter(d => !d.logged.meal);
+  if (noMeals.length) {
+    const names = noMeals.map(d => weekdayName(d.date, noMeals.length > 2));
+    return {
+      id: 'missed-meals',
+      tone: 'attention',
+      icon: 'restaurant-outline',
+      text: `No meals logged on ${listNames(names)} — your averages read low without them.`,
+      priority: 80,
+    };
+  }
+  return null;
+}
+
 function buildInsights(
   days: ProgressDay[],
   targets: Targets,
-  summary: Summary
+  summary: Summary,
+  today: string
 ): Insight[] {
   const { nutrition, weight, activity, consistency } = summary;
   const period =
@@ -471,7 +535,11 @@ function buildInsights(
         id: 'empty',
         tone: 'neutral',
         icon: 'sparkles-outline',
-        text: 'Log meals, weight and workouts for a few days to see your trends here.',
+        // A fresh part week (e.g. Sunday morning) isn't a new user
+        text:
+          days.length < 7
+            ? `New week — nothing logged yet. Log a meal, weigh in or work out to get it going.`
+            : 'Log meals, weight and workouts for a few days to see your trends here.',
       },
     ];
   }
@@ -574,8 +642,8 @@ function buildInsights(
     );
   }
 
-  // Workouts
-  if (days.length >= 7) {
+  // Workouts (a part week is never flagged — there's still time to hit the goal)
+  {
     const perWeek = activity.workoutsPerWeek ?? 0;
     const met = perWeek >= activity.weeklyGoal;
     add(
@@ -583,7 +651,7 @@ function buildInsights(
         id: 'workouts',
         tone: met
           ? 'good'
-          : perWeek < activity.weeklyGoal / 2
+          : days.length >= 7 && perWeek < activity.weeklyGoal / 2
             ? 'attention'
             : 'neutral',
         icon: 'barbell-outline',
@@ -665,6 +733,14 @@ function buildInsights(
     );
   }
 
+  const missed = missedDaysInsight(days, today);
+  if (missed) {
+    insights.push(missed);
+    // The reminder names the days, which says more than the week's logging rate
+    const gaps = insights.findIndex(i => i.id === 'logging-gaps');
+    if (gaps >= 0) insights.splice(gaps, 1);
+  }
+
   // Doing well → lead with the best good news, then what needs attention
   const good = insights
     .filter(i => i.tone === 'good')
@@ -677,7 +753,10 @@ function buildInsights(
     good.length >= attentionCount
       ? [...good, ...rest]
       : [...rest.slice(0, 1), ...good, ...rest.slice(1)];
-  return ordered.slice(0, 4).map(({ priority, ...insight }) => {
+  const top = ordered.slice(0, 4);
+  // The missed-day reminder always makes the cut in week view
+  if (missed && !top.includes(missed)) top[top.length - 1] = missed;
+  return top.map(({ priority, ...insight }) => {
     void priority;
     return insight;
   });
