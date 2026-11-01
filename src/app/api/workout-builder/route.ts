@@ -6,6 +6,7 @@ import {
   estimateMinutes,
   generateWorkout,
   hydrateWorkout,
+  loadExercises,
   parseBuilderInputs,
   titleFor,
   type UserWorkoutRow,
@@ -29,7 +30,12 @@ interface TemplateRow {
 // fewer than MAX_VARIANTS_PER_KEY exist.
 //
 // Body: { clerkId, duration, focus[], location, equipment[], style,
-//         replaceWorkoutId? }  — replaceWorkoutId = Shuffle an existing planned workout
+//         replaceWorkoutId?, preview?, templateId? }
+//   replaceWorkoutId = Shuffle an existing planned workout
+//   preview: true    = resolve the template (cache-first, same as Start) and return its
+//                      exercises without creating a workout — Today's recommended
+//                      workout shows this when expanded
+//   templateId       = Start from that exact template (the one the preview showed)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -60,11 +66,18 @@ export async function POST(request: NextRequest) {
     `) as TemplateRow[];
 
     let template: TemplateRow;
-    const wantsNew = replacing
-      ? existing.length < MAX_VARIANTS_PER_KEY
-      : existing.length === 0;
+    const requested = body.templateId
+      ? existing.find(t => t.id === Number(body.templateId))
+      : undefined;
+    const wantsNew =
+      !requested &&
+      (replacing
+        ? existing.length < MAX_VARIANTS_PER_KEY
+        : existing.length === 0);
 
-    if (wantsNew) {
+    if (requested && !replacing) {
+      template = requested;
+    } else if (wantsNew) {
       const profile = await fetchUserProfile(clerkId);
       const { blocks, source } = await generateWorkout(
         clerkId,
@@ -83,6 +96,19 @@ export async function POST(request: NextRequest) {
       template = (pool.length ? pool : existing).reduce((a, b) =>
         b.use_count < a.use_count ? b : a
       );
+    }
+
+    if (body.preview === true) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          templateId: template.id,
+          title: template.title,
+          est_minutes: estimateMinutes(template.blocks),
+          blocks: template.blocks,
+          exercises: await loadExercises(template.blocks.map(b => b.slug)),
+        },
+      });
     }
 
     await sql`UPDATE workout_templates SET use_count = use_count + 1 WHERE id = ${template.id}`;

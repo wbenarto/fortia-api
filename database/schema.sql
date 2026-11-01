@@ -468,3 +468,55 @@ COMMENT ON TABLE exercise_video_cache IS 'Global cache for YouTube exercise vide
 COMMENT ON TABLE ai_workout_decisions IS 'Tracks all AI decisions for program generation and adaptation';
 COMMENT ON TABLE workout_feedback IS 'Stores user feedback after completing workouts for AI adaptation';
 COMMENT ON TABLE muscle_balance_history IS 'Historical tracking of muscle group volume across ALL workouts for all-time balance visualization and progress tracking';
+
+-- Challenges: a user opts into a dated macro challenge (Challenges tab).
+-- Daily results are computed from meals / workouts already logged, so only the
+-- challenge itself is stored. Targets are copied at the start so later diet or
+-- profile changes don't recolor past days.
+
+CREATE TABLE IF NOT EXISTS challenges (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  diet_type TEXT NOT NULL,
+  workouts_per_week INTEGER NOT NULL CHECK (workouts_per_week BETWEEN 1 AND 7),
+  -- { calories, protein, carbs, fats } at the start of the challenge
+  targets JSONB NOT NULL,
+  -- active → completed (end date passed) or ended (stopped early)
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'ended')),
+  created_at TIMESTAMP DEFAULT NOW(),
+  ended_at TIMESTAMP,
+  CHECK (end_date >= start_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_challenges_clerk ON challenges (clerk_id, status);
+-- One active challenge per user
+CREATE UNIQUE INDEX IF NOT EXISTS idx_challenges_one_active
+  ON challenges (clerk_id) WHERE status = 'active';
+
+-- Favorite meals (Log a meal → Favorites). A snapshot of the meal so it can be logged
+-- again in one tap, even after the original log is deleted.
+-- meal_key = lower(food name) | lower(portion) | ingredients JSON — the same identity
+-- the Recent list dedupes on, so the app can show which recents are favorites.
+
+CREATE TABLE IF NOT EXISTS favorite_meals (
+  id SERIAL PRIMARY KEY,
+  clerk_id TEXT NOT NULL,
+  meal_key TEXT NOT NULL,
+  food_name TEXT NOT NULL,
+  portion_size TEXT,
+  calories INTEGER NOT NULL DEFAULT 0,
+  protein NUMERIC(6,2) NOT NULL DEFAULT 0,
+  carbs NUMERIC(6,2) NOT NULL DEFAULT 0,
+  fats NUMERIC(6,2) NOT NULL DEFAULT 0,
+  fiber NUMERIC(6,2) NOT NULL DEFAULT 0,
+  sugar NUMERIC(6,2) NOT NULL DEFAULT 0,
+  sodium INTEGER NOT NULL DEFAULT 0,
+  confidence_score NUMERIC(3,2) NOT NULL DEFAULT 0.5,
+  ingredients JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (clerk_id, meal_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_favorite_meals_clerk ON favorite_meals (clerk_id, created_at DESC);
