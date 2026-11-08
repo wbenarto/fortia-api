@@ -31,6 +31,17 @@ export const FOCUS_KEYS = [
   'legs',
   'glutes',
   'core',
+  // Specific muscles: matched on primary_muscles (SPECIFIC_MUSCLES), not focus_tags
+  'biceps',
+  'triceps',
+  'forearms',
+  'lats',
+  'traps',
+  'lower_back',
+  'abs',
+  'quads',
+  'hamstrings',
+  'calves',
 ] as const;
 export type FocusKey = (typeof FOCUS_KEYS)[number];
 
@@ -66,6 +77,21 @@ const LOWER_MUSCLES = new Set([
   'abductors',
   'glutes',
 ]);
+
+// Specific-muscle focus → free-exercise-db primary_muscles. These are looked up on
+// the muscle directly, so no reseed of focus_tags is needed.
+export const SPECIFIC_MUSCLES: Partial<Record<FocusKey, string[]>> = {
+  biceps: ['biceps'],
+  triceps: ['triceps'],
+  forearms: ['forearms'],
+  lats: ['lats'],
+  traps: ['traps'],
+  lower_back: ['lower back'],
+  abs: ['abdominals'],
+  quads: ['quadriceps'],
+  hamstrings: ['hamstrings'],
+  calves: ['calves'],
+};
 
 export const MUSCLE_FOCUS: Record<string, FocusKey[]> = {
   chest: ['chest'],
