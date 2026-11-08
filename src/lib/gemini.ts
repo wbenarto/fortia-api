@@ -5,6 +5,7 @@ type GeminiGenerationConfig = {
 	topK?: number;
 	thinkingConfig?: { thinkingLevel?: string };
 	responseMimeType?: string;
+	mediaResolution?: string;
 };
 
 type GeminiPart = {
