@@ -5,6 +5,7 @@ import {
   FOCUS_KEYS,
   IMAGE_BASE_URL,
   LOCATION_KEYS,
+  SPECIFIC_MUSCLES,
   STYLE_KEYS,
   type EquipmentKey,
   type FocusKey,
@@ -76,6 +77,16 @@ export const FOCUS_LABELS: Record<FocusKey, string> = {
   legs: 'Legs',
   glutes: 'Glutes',
   core: 'Core',
+  biceps: 'Biceps',
+  triceps: 'Triceps',
+  forearms: 'Forearms',
+  lats: 'Lats',
+  traps: 'Traps',
+  lower_back: 'Lower back',
+  abs: 'Abs',
+  quads: 'Quads',
+  hamstrings: 'Hamstrings',
+  calves: 'Calves',
 };
 
 const LOCATION_LABELS: Record<LocationKey, string> = {
@@ -148,6 +159,17 @@ const STRETCH_EXPANSION: Partial<Record<FocusKey, FocusKey[]>> = {
   full_body: ['legs', 'back', 'chest', 'shoulders', 'core'],
   push: ['chest', 'shoulders', 'arms'],
   pull: ['back', 'arms'],
+  // Specific muscles stretch with their wider area (stretches are tagged broadly)
+  biceps: ['arms'],
+  triceps: ['arms'],
+  forearms: ['arms'],
+  lats: ['back'],
+  traps: ['back', 'shoulders'],
+  lower_back: ['back', 'core'],
+  abs: ['core'],
+  quads: ['legs'],
+  hamstrings: ['legs'],
+  calves: ['legs'],
 };
 
 const tagsFor = (focus: FocusKey[], stretching: boolean) => [
@@ -249,10 +271,18 @@ async function mainCandidates(inputs: BuilderInputs): Promise<Candidate[]> {
        WHERE equipment <@ $1::text[]
          AND category = ANY($2::text[])
          AND COALESCE(level, '') <> 'expert'
-         AND ($4::text IS NULL OR $4::text = ANY(focus_tags))
+         AND ($4::text IS NULL OR $4::text = ANY(focus_tags)
+              OR primary_muscles && $5::text[])
        ORDER BY random()
        LIMIT $3`,
-      [inputs.equipment, config.categories, limit, tag]
+      [
+        inputs.equipment,
+        config.categories,
+        limit,
+        tag,
+        // Specific muscle (biceps, quads…): match the exercise's primary muscle
+        (tag && SPECIFIC_MUSCLES[tag as FocusKey]) || [],
+      ]
     )) as Candidate[];
 
   let rows: Candidate[] = [];

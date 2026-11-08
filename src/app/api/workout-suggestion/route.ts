@@ -1,7 +1,12 @@
 import { getDayBounds, getTodayDate } from '@/lib/dateUtils';
 import { ErrorResponses, handleDatabaseError } from '@/lib/errorUtils';
 import { fetchUserProfile } from '@/lib/userUtils';
-import { suggestWorkouts } from '@/lib/workoutSuggestion';
+import {
+  cacheKeyFor,
+  loadExercises,
+  type WorkoutBlock,
+} from '@/lib/workoutBuilder';
+import { suggestWorkouts, type Suggestion } from '@/lib/workoutSuggestion';
 import { neon } from '@neondatabase/serverless';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -48,7 +53,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        suggestions: list,
+        suggestions: await withImages(list),
         inProgress: inProgress[0] || null,
         completedToday: completed[0] || null,
       },
@@ -57,4 +62,33 @@ export async function GET(request: NextRequest) {
     console.error('Workout suggestion error:', error);
     return handleDatabaseError(error);
   }
+}
+
+// Card image for each suggestion: the first main exercise of the template that
+// Start / preview would use (least-used cached variant). Cache only — a suggestion
+// with no template yet gets no image, so this never triggers a build.
+async function withImages(
+  list: Suggestion[]
+): Promise<(Suggestion & { image: string | null })[]> {
+  if (list.length === 0) return [];
+  const keys = list.map(s => cacheKeyFor(s.inputs));
+  const templates = (await sql.query(
+    `SELECT cache_key, blocks FROM workout_templates
+     WHERE cache_key = ANY($1::text[])
+     ORDER BY cache_key, use_count, id`,
+    [[...new Set(keys)]]
+  )) as { cache_key: string; blocks: WorkoutBlock[] }[];
+
+  const slugByKey = new Map<string, string>();
+  for (const t of templates) {
+    if (slugByKey.has(t.cache_key)) continue; // first row = least used
+    const block = t.blocks.find(b => b.section === 'main') ?? t.blocks[0];
+    if (block) slugByKey.set(t.cache_key, block.slug);
+  }
+
+  const exercises = await loadExercises([...slugByKey.values()]);
+  return list.map((s, i) => {
+    const slug = slugByKey.get(keys[i]);
+    return { ...s, image: (slug && exercises[slug]?.images[0]) || null };
+  });
 }
